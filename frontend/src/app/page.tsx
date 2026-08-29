@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
@@ -18,10 +19,19 @@ export default function Home() {
     <main className="min-h-screen bg-background text-ink">
       {/* NAVBAR */}
       <header className="flex items-center justify-between px-7 py-6 md:px-20">
-        <div className="text-2xl font-semibold tracking-[-0.04em]">
-          IP-SAKTI{" "}
-          <span className="text-accent text-3xl font-bold">360</span>
-        </div>
+        <Link
+          href="/"
+          className="group inline-flex items-baseline tracking-[-0.04em] transition-opacity duration-200 hover:opacity-75"
+          aria-label="Go to IP-SAKTI home"
+        >
+          <span className="text-2xl font-semibold">
+            IP-SAKTI
+          </span>
+
+          <span className="ml-1 text-3xl font-bold text-accent transition-transform duration-200 group-hover:translate-x-0.5">
+            360
+          </span>
+        </Link>
 
         <nav className="hidden items-center gap-10 text-sm text-ink-muted md:flex">
           <span>How it works</span>
