@@ -60,7 +60,8 @@ export default function DashboardPage() {
               </p>
 
               <h2 className="mt-2 text-2xl font-semibold tracking-tight">
-                {MOCK_CASE.name}
+                Herbal stress-management formulation
+                
               </h2>
 
               <p className="mt-3 text-sm leading-7 text-ink-muted">

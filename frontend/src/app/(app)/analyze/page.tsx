@@ -152,7 +152,7 @@ export default function AnalyzeInnovationPage() {
             </p>
 
             <p className="mt-1 text-sm font-medium">
-              {MOCK_CASE.name}
+              Herbal stress-management formulation
             </p>
           </div>
 
