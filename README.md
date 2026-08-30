@@ -1,6 +1,9 @@
 # IP-SAKTI
 
-The Next.js application is located in [`frontend/`](frontend/).
+The project is organized into:
+
+- [`frontend/`](frontend/) — Next.js web application
+- [`backend/`](backend/) — FastAPI application and backend services
 
 ## Frontend development
 
@@ -20,3 +23,15 @@ Run the frontend checks from the `frontend/` directory:
 npm run lint
 npm run build
 ```
+
+## Backend development
+
+Run backend commands from the `backend/` directory:
+
+```bash
+cd backend
+uvicorn main:app --reload
+```
+
+The current backend requires its Python dependencies and PostgreSQL database to
+be configured before startup.
