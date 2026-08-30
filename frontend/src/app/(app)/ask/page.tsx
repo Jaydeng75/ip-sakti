@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { MOCK_EVIDENCE } from "@/lib/mock-data";
+import { useEffect, useState } from "react";
+import { MOCK_CASE, MOCK_EVIDENCE } from "@/lib/mock-data";
+import { getCurrentCase } from "@/lib/case-store";
 
 type Message = {
   role: "user" | "assistant";
   text: string;
 };
 
+type CurrentCase = typeof MOCK_CASE;
+
 export default function AskPage() {
   const [question, setQuestion] = useState("");
+  const [currentCase, setCurrentCase] = useState<CurrentCase>(MOCK_CASE);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -17,6 +21,10 @@ export default function AskPage() {
     },
   ]);
   const [selectedSource, setSelectedSource] = useState(0);
+
+  useEffect(() => {
+    setCurrentCase(getCurrentCase());
+  }, []);
 
   function askQuestion() {
     const trimmed = question.trim();
@@ -59,12 +67,12 @@ export default function AskPage() {
 
         {/* CASE BAR */}
         <div className="mt-6 flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-accent-subtle px-3 py-1.5 text-xs font-medium text-accent">
-            Herbal stress-management formulation
+          <span className="max-w-full rounded-full bg-accent-subtle px-3 py-1.5 text-xs font-medium text-accent">
+            {currentCase.productDescription}
           </span>
 
           <span className="rounded-full border border-border px-3 py-1.5 text-xs text-ink-muted">
-            India
+            {currentCase.jurisdiction}
           </span>
         </div>
 

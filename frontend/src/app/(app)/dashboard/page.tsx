@@ -1,7 +1,25 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { MOCK_CASE, MOCK_GENOME_NODES, MOCK_IP_ROUTES, MOCK_REGULATORY_STEPS, MOCK_ROADMAP_STEPS } from "@/lib/mock-data";
+import {
+  MOCK_CASE,
+  MOCK_GENOME_NODES,
+  MOCK_IP_ROUTES,
+  MOCK_REGULATORY_STEPS,
+  MOCK_ROADMAP_STEPS,
+} from "@/lib/mock-data";
+import { getCurrentCase } from "@/lib/case-store";
+
+type CurrentCase = typeof MOCK_CASE;
 
 export default function DashboardPage() {
+  const [currentCase, setCurrentCase] = useState<CurrentCase>(MOCK_CASE);
+
+  useEffect(() => {
+    setCurrentCase(getCurrentCase());
+  }, []);
+
   const evidenceGaps = MOCK_GENOME_NODES.filter(
     (node) => node.status === "needs-evidence" || node.status === "uncertain"
   ).length;
@@ -46,7 +64,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="font-mono text-xs text-ink-muted">
-              {MOCK_CASE.jurisdiction} · CASE {MOCK_CASE.id}
+              {currentCase.jurisdiction} · CASE {currentCase.id}
             </div>
           </div>
         </header>
@@ -61,11 +79,10 @@ export default function DashboardPage() {
 
               <h2 className="mt-2 text-2xl font-semibold tracking-tight">
                 Herbal stress-management formulation
-                
               </h2>
 
               <p className="mt-3 text-sm leading-7 text-ink-muted">
-                {MOCK_CASE.productDescription}
+                {currentCase.productDescription}
               </p>
             </div>
 
@@ -78,7 +95,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="mt-7 flex flex-wrap gap-2">
-            {MOCK_CASE.ingredients.map((ingredient) => (
+            {currentCase.ingredients.map((ingredient) => (
               <span
                 key={ingredient}
                 className="rounded-full border border-border px-3 py-1.5 text-xs text-ink-muted"
@@ -154,18 +171,18 @@ export default function DashboardPage() {
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-4">
-            <ProgressItem
-              label="Innovation"
-              active={true}
-            />
+            <ProgressItem label="Innovation" active={true} />
+
             <ProgressItem
               label="Evidence"
               active={evidenceGaps === 0}
             />
+
             <ProgressItem
               label="IP strategy"
               active={strongIPRoutes > 0}
             />
+
             <ProgressItem
               label="Regulatory"
               active={completedSteps >= 4}
@@ -204,7 +221,10 @@ export default function DashboardPage() {
             </p>
 
             <div className="mt-5 space-y-2">
-              <QuickLink href="/traditional-knowledge" label="Traditional Knowledge" />
+              <QuickLink
+                href="/traditional-knowledge"
+                label="Traditional Knowledge"
+              />
               <QuickLink href="/ip-strategy" label="IP Strategy" />
               <QuickLink href="/jurisdiction" label="Compare markets" />
               <QuickLink href="/ask" label="Ask IP-SAKTI" />

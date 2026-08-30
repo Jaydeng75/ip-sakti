@@ -1,7 +1,19 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { MOCK_CASE } from "@/lib/mock-data";
+import { getCurrentCase } from "@/lib/case-store";
+
+type CurrentCase = typeof MOCK_CASE;
 
 export default function ReportsPage() {
+  const [currentCase, setCurrentCase] = useState<CurrentCase>(MOCK_CASE);
+
+  useEffect(() => {
+    setCurrentCase(getCurrentCase());
+  }, []);
+
   return (
     <main className="min-h-screen bg-background text-ink">
       <div className="mx-auto max-w-6xl px-6 py-10 md:px-10 md:py-14">
@@ -20,17 +32,22 @@ export default function ReportsPage() {
         </header>
 
         <section className="mt-8 grid gap-6 md:grid-cols-2">
+          {/* CURRENT CASE */}
           <div className="rounded-3xl border border-border bg-surface p-6 md:p-8">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
               Current case
             </p>
 
             <h2 className="mt-3 text-2xl font-semibold tracking-tight">
-              Herbal stress-management formulation
+              Current innovation
             </h2>
 
-            <p className="mt-2 text-sm text-ink-muted">
-              {MOCK_CASE.jurisdiction} · {MOCK_CASE.status}
+            <p className="mt-3 text-sm leading-7 text-ink-muted">
+              {currentCase.productDescription}
+            </p>
+
+            <p className="mt-3 text-sm text-ink-muted">
+              {currentCase.jurisdiction} · {currentCase.status}
             </p>
 
             <Link
@@ -41,6 +58,7 @@ export default function ReportsPage() {
             </Link>
           </div>
 
+          {/* REPORT */}
           <div className="rounded-3xl border border-border bg-[#16212B] p-6 text-white md:p-8">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/50">
               Report

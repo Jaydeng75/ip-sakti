@@ -1,7 +1,23 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { MOCK_CASE } from "@/lib/mock-data";
+import { getCurrentCase } from "@/lib/case-store";
+
+type CurrentCase = typeof MOCK_CASE;
 
 export default function SavedCasesPage() {
+  const [currentCase, setCurrentCase] = useState<CurrentCase>(MOCK_CASE);
+
+  useEffect(() => {
+    setCurrentCase(getCurrentCase());
+  }, []);
+
+  const updatedDate = new Date(currentCase.updatedAt).toLocaleDateString(
+    "en-IN"
+  );
+
   return (
     <main className="min-h-screen bg-background text-ink">
       <div className="mx-auto max-w-6xl px-6 py-10 md:px-10 md:py-14">
@@ -39,10 +55,10 @@ export default function SavedCasesPage() {
 
           <div className="mt-6 rounded-3xl border border-border bg-surface p-6 md:p-8">
             <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-              <div>
+              <div className="min-w-0">
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-accent-subtle px-3 py-1.5 text-xs font-medium text-accent">
-                    {MOCK_CASE.jurisdiction}
+                    {currentCase.jurisdiction}
                   </span>
 
                   <span className="rounded-full bg-warm-subtle px-3 py-1.5 text-xs font-medium text-warm">
@@ -51,17 +67,17 @@ export default function SavedCasesPage() {
                 </div>
 
                 <h3 className="mt-4 text-2xl font-semibold tracking-tight">
-                  Herbal stress-management formulation
+                  Current innovation
                 </h3>
 
                 <p className="mt-3 max-w-2xl text-sm leading-7 text-ink-muted">
-                  {MOCK_CASE.productDescription}
+                  {currentCase.productDescription}
                 </p>
               </div>
 
               <Link
                 href="/analyze"
-                className="inline-flex h-11 items-center justify-center rounded-xl bg-accent px-5 text-sm font-medium text-white hover:bg-accent/90"
+                className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-accent px-5 text-sm font-medium text-white hover:bg-accent/90"
               >
                 Open case →
               </Link>
@@ -73,7 +89,7 @@ export default function SavedCasesPage() {
               </p>
 
               <p className="mt-1 text-sm text-ink">
-                {new Date(MOCK_CASE.updatedAt).toLocaleDateString("en-IN")}
+                {updatedDate}
               </p>
             </div>
           </div>

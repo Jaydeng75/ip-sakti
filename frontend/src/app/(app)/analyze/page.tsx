@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import {
-  MOCK_CASE,
-  MOCK_GENOME_NODES,
-} from "@/lib/mock-data";
+import { MOCK_CASE, MOCK_GENOME_NODES } from "@/lib/mock-data";
+import { saveCurrentCase } from "@/lib/case-store";
 
 export default function AnalyzeInnovationPage() {
   const [description, setDescription] = useState("");
@@ -13,16 +11,35 @@ export default function AnalyzeInnovationPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzed, setAnalyzed] = useState(false);
 
+  const analysisTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (analysisTimer.current) {
+        clearTimeout(analysisTimer.current);
+      }
+    };
+  }, []);
+
   function handleAnalyze() {
-    if (!description.trim()) return;
+    const trimmed = description.trim();
+
+    if (!trimmed || analyzing) return;
+
+    saveCurrentCase(trimmed);
 
     setAnalyzing(true);
     setAnalyzed(false);
 
-    setTimeout(() => {
+    analysisTimer.current = setTimeout(() => {
       setAnalyzing(false);
       setAnalyzed(true);
     }, 1800);
+  }
+
+  function handleLoadExample() {
+    setDescription(MOCK_CASE.productDescription);
+    setAnalyzed(false);
   }
 
   return (
@@ -58,7 +75,10 @@ export default function AnalyzeInnovationPage() {
             <textarea
               id="innovation"
               value={description}
-              onChange={(event) => setDescription(event.target.value)}
+              onChange={(event) => {
+                setDescription(event.target.value);
+                setAnalyzed(false);
+              }}
               placeholder="Describe your formulation, process, product or invention..."
               className="mt-3 min-h-56 w-full resize-none rounded-2xl border border-border bg-background p-5 text-base leading-7 outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/10"
             />
@@ -75,7 +95,7 @@ export default function AnalyzeInnovationPage() {
           {/* MORE DETAILS */}
           <button
             type="button"
-            onClick={() => setShowDetails(!showDetails)}
+            onClick={() => setShowDetails((value) => !value)}
             className="mt-6 text-sm font-medium text-accent"
           >
             {showDetails ? "Hide additional details ↑" : "Add more details ↓"}
@@ -84,11 +104,14 @@ export default function AnalyzeInnovationPage() {
           {showDetails && (
             <div className="mt-5 grid gap-4 border-t border-border pt-5 md:grid-cols-2">
               <Field label="Classical formulation?" value="No" />
+
               <Field
                 label="Biological-resource sourcing"
                 value="Madhya Pradesh"
               />
+
               <Field label="Manufacturing process" value="Co-extraction" />
+
               <Field label="Brand / product name" value="Not provided" />
             </div>
           )}
@@ -105,7 +128,9 @@ export default function AnalyzeInnovationPage() {
               disabled={!description.trim() || analyzing}
               className="inline-flex h-12 items-center justify-center rounded-xl bg-accent px-7 text-sm font-medium text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {analyzing ? "Analyzing your innovation..." : "Analyze innovation →"}
+              {analyzing
+                ? "Analyzing your innovation..."
+                : "Analyze innovation →"}
             </button>
           </div>
         </section>
@@ -121,7 +146,7 @@ export default function AnalyzeInnovationPage() {
           </section>
         )}
 
-        {/* EMPTY STATE / EXAMPLE */}
+        {/* EMPTY STATE */}
         {!analyzing && !analyzed && (
           <section className="mt-8 grid gap-4 md:grid-cols-3">
             <InfoCard
@@ -158,7 +183,7 @@ export default function AnalyzeInnovationPage() {
 
           <button
             type="button"
-            onClick={() => setDescription(MOCK_CASE.productDescription)}
+            onClick={handleLoadExample}
             className="text-sm font-medium text-accent hover:underline"
           >
             Load example
@@ -202,13 +227,9 @@ function InfoCard({
         {number}
       </span>
 
-      <h2 className="mt-8 text-lg font-semibold tracking-tight">
-        {title}
-      </h2>
+      <h2 className="mt-8 text-lg font-semibold tracking-tight">{title}</h2>
 
-      <p className="mt-2 text-sm leading-6 text-ink-muted">
-        {text}
-      </p>
+      <p className="mt-2 text-sm leading-6 text-ink-muted">{text}</p>
     </div>
   );
 }
@@ -310,10 +331,7 @@ function AnalysisWorkspace() {
                   </div>
 
                   <div className="flex shrink-0 gap-2">
-                    <StatusBadge
-                      label={node.layer}
-                      tone="accent"
-                    />
+                    <StatusBadge label={node.layer} tone="accent" />
 
                     <StatusBadge
                       label={node.status.replace("-", " ")}
@@ -387,13 +405,9 @@ function SummaryCard({
         {title}
       </p>
 
-      <p className="mt-3 text-xl font-semibold tracking-tight">
-        {value}
-      </p>
+      <p className="mt-3 text-xl font-semibold tracking-tight">{value}</p>
 
-      <p className="mt-2 text-xs leading-5 text-ink-muted">
-        {text}
-      </p>
+      <p className="mt-2 text-xs leading-5 text-ink-muted">{text}</p>
     </div>
   );
 }

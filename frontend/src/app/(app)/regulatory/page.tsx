@@ -1,6 +1,18 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { MOCK_CASE, MOCK_REGULATORY_STEPS } from "@/lib/mock-data";
+import { getCurrentCase } from "@/lib/case-store";
+
+type CurrentCase = typeof MOCK_CASE;
 
 export default function RegulatoryPage() {
+  const [currentCase, setCurrentCase] = useState<CurrentCase>(MOCK_CASE);
+
+  useEffect(() => {
+    setCurrentCase(getCurrentCase());
+  }, []);
+
   const completeSteps = MOCK_REGULATORY_STEPS.filter(
     (step) => step.type === "fact"
   ).length;
@@ -27,21 +39,25 @@ export default function RegulatoryPage() {
         {/* CASE CONTEXT */}
         <section className="mt-8 rounded-3xl border border-border bg-surface p-6 md:p-8">
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-            <div>
+            <div className="min-w-0">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
                 Active case
               </p>
 
               <h2 className="mt-2 text-2xl font-semibold tracking-tight">
-                Herbal stress-management formulation
+                Current innovation
               </h2>
 
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-ink-muted">
+                {currentCase.productDescription}
+              </p>
+
               <p className="mt-2 text-sm text-ink-muted">
-                {MOCK_CASE.jurisdiction} · {MOCK_CASE.productType}
+                {currentCase.jurisdiction} · {currentCase.productType}
               </p>
             </div>
 
-            <div className="text-sm text-ink-muted">
+            <div className="shrink-0 text-sm text-ink-muted">
               {completeSteps} of {MOCK_REGULATORY_STEPS.length} requirements
               classified
             </div>
@@ -74,12 +90,10 @@ export default function RegulatoryPage() {
                 className="rounded-2xl border border-border bg-surface p-4"
               >
                 <span className="font-mono text-[10px] font-semibold text-accent">
-                  0{index + 1}
+                  {String(index + 1).padStart(2, "0")}
                 </span>
 
-                <p className="mt-5 text-sm font-medium leading-5">
-                  {step}
-                </p>
+                <p className="mt-5 text-sm font-medium leading-5">{step}</p>
 
                 {index < 5 && (
                   <p className="mt-3 hidden text-xs text-ink-muted md:block">
@@ -92,7 +106,7 @@ export default function RegulatoryPage() {
         </section>
 
         {/* REQUIREMENTS */}
-        <section className="mt-10">
+        <section id="requirements" className="mt-10">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
               Current assessment
@@ -147,7 +161,7 @@ export default function RegulatoryPage() {
             </p>
 
             <h2 className="mt-3 text-2xl font-semibold tracking-tight">
-              Don't confuse approval with evidence.
+              Don&apos;t confuse approval with evidence.
             </h2>
 
             <p className="mt-3 text-sm leading-7 text-white/65">
@@ -192,10 +206,7 @@ function RequirementCard({
   };
 
   return (
-    <article
-      id="requirements"
-      className="rounded-2xl border border-border bg-surface p-6 md:p-7"
-    >
+    <article className="rounded-2xl border border-border bg-surface p-6 md:p-7">
       <div className="flex flex-col gap-4 md:flex-row md:items-start">
         <span className="font-mono text-xs font-semibold text-ink-muted">
           {String(number).padStart(2, "0")}
@@ -203,9 +214,7 @@ function RequirementCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold tracking-tight">
-              {title}
-            </h3>
+            <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
 
             <span
               className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${statusStyles[type]}`}
@@ -214,9 +223,7 @@ function RequirementCard({
             </span>
           </div>
 
-          <p className="mt-3 text-sm leading-7 text-ink-muted">
-            {detail}
-          </p>
+          <p className="mt-3 text-sm leading-7 text-ink-muted">{detail}</p>
         </div>
       </div>
     </article>
