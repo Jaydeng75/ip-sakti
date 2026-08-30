@@ -1,27 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  MOCK_CASE,
   MOCK_GENOME_NODES,
   MOCK_IP_ROUTES,
   MOCK_REGULATORY_STEPS,
   MOCK_ROADMAP_STEPS,
 } from "@/lib/mock-data";
-import { getCurrentCase } from "@/lib/case-store";
-
-type CurrentCase = typeof MOCK_CASE;
+import { useCurrentCase } from "@/lib/use-current-case";
 
 export default function DashboardPage() {
-  const [currentCase, setCurrentCase] = useState<CurrentCase>(MOCK_CASE);
-
-  useEffect(() => {
-    setCurrentCase(getCurrentCase());
-  }, []);
+  const currentCase = useCurrentCase();
 
   const evidenceGaps = MOCK_GENOME_NODES.filter(
-    (node) => node.status === "needs-evidence" || node.status === "uncertain"
+    (node) =>
+      node.status === "needs-evidence" || node.status === "uncertain"
   ).length;
 
   const strongIPRoutes = MOCK_IP_ROUTES.filter(
@@ -78,7 +71,7 @@ export default function DashboardPage() {
               </p>
 
               <h2 className="mt-2 text-2xl font-semibold tracking-tight">
-                Herbal stress-management formulation
+                Current innovation
               </h2>
 
               <p className="mt-3 text-sm leading-7 text-ink-muted">
@@ -225,9 +218,21 @@ export default function DashboardPage() {
                 href="/traditional-knowledge"
                 label="Traditional Knowledge"
               />
-              <QuickLink href="/ip-strategy" label="IP Strategy" />
-              <QuickLink href="/jurisdiction" label="Compare markets" />
-              <QuickLink href="/ask" label="Ask IP-SAKTI" />
+
+              <QuickLink
+                href="/ip-strategy"
+                label="IP Strategy"
+              />
+
+              <QuickLink
+                href="/jurisdiction"
+                label="Compare markets"
+              />
+
+              <QuickLink
+                href="/ask"
+                label="Ask IP-SAKTI"
+              />
             </div>
           </div>
         </section>
@@ -264,7 +269,9 @@ function AttentionCard({
       </p>
 
       <div className="mt-5 flex items-center justify-between gap-3">
-        <p className="text-xl font-semibold tracking-tight">{value}</p>
+        <p className="text-xl font-semibold tracking-tight">
+          {value}
+        </p>
 
         <span
           className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${toneClass}`}

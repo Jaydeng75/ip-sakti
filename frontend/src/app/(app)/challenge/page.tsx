@@ -1,8 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { useCurrentCase } from "@/lib/use-current-case";
 
-const reviewerTabs = [
+type ReviewerTab = {
+  id: "patent" | "regulatory" | "abs" | "science";
+  label: string;
+  short: string;
+  objection: string;
+  weakPoint: string;
+  missingEvidence: string;
+  nextStep: string;
+  score: number;
+  novelty: string;
+  evidence: string;
+  regulatory: string;
+  abs: string;
+};
+
+const reviewerTabs: ReviewerTab[] = [
   {
     id: "patent",
     label: "Patent Examiner",
@@ -15,6 +31,11 @@ const reviewerTabs = [
       "Stronger evidence supporting the novelty of the specific combination or process.",
     nextStep:
       "Define the precise technical feature that distinguishes the invention from known formulations.",
+    score: 62,
+    novelty: "Medium",
+    evidence: "High",
+    regulatory: "Low",
+    abs: "Low",
   },
   {
     id: "regulatory",
@@ -28,6 +49,11 @@ const reviewerTabs = [
       "A clearer classification and supporting documentation for the proposed claims.",
     nextStep:
       "Confirm product classification and align all claims with the applicable regulatory framework.",
+    score: 54,
+    novelty: "Low",
+    evidence: "High",
+    regulatory: "High",
+    abs: "Medium",
   },
   {
     id: "abs",
@@ -41,6 +67,11 @@ const reviewerTabs = [
       "Confirmed documentation showing the applicable biodiversity / ABS position.",
     nextStep:
       "Complete the sourcing record and confirm the relevant biodiversity authority requirements.",
+    score: 71,
+    novelty: "Low",
+    evidence: "Medium",
+    regulatory: "Medium",
+    abs: "High",
   },
   {
     id: "science",
@@ -54,14 +85,37 @@ const reviewerTabs = [
       "Combination-level evidence supporting the proposed product claims.",
     nextStep:
       "Generate or obtain evidence that directly addresses the combined formulation and its claims.",
+    score: 78,
+    novelty: "Low",
+    evidence: "High",
+    regulatory: "Medium",
+    abs: "Low",
   },
 ];
 
 export default function ChallengeInnovationPage() {
-  const [activeTab, setActiveTab] = useState("patent");
+  const currentCase = useCurrentCase();
+
+  const [activeTab, setActiveTab] =
+    useState<ReviewerTab["id"]>("patent");
+
+  const [reviewRun, setReviewRun] = useState(false);
 
   const reviewer =
     reviewerTabs.find((tab) => tab.id === activeTab) ?? reviewerTabs[0];
+
+  function handleReviewerChange(id: ReviewerTab["id"]) {
+    setActiveTab(id);
+    setReviewRun(true);
+  }
+
+  function handleRerun() {
+    setReviewRun(false);
+
+    window.setTimeout(() => {
+      setReviewRun(true);
+    }, 500);
+  }
 
   return (
     <main className="min-h-screen bg-background text-ink">
@@ -85,21 +139,25 @@ export default function ChallengeInnovationPage() {
         {/* CASE */}
         <section className="mt-8 rounded-3xl border border-border bg-surface p-6 md:p-8">
           <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-            <div>
+            <div className="min-w-0">
               <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-muted">
                 Innovation under review
               </p>
 
               <h2 className="mt-2 text-2xl font-semibold tracking-tight">
-                Herbal stress-management formulation
+                Current innovation
               </h2>
 
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-ink-muted">
+                {currentCase.productDescription}
+              </p>
+
               <p className="mt-2 text-sm text-ink-muted">
-                India · Ayurvedic proprietary medicine
+                {currentCase.jurisdiction} · {currentCase.productType}
               </p>
             </div>
 
-            <span className="w-fit rounded-full bg-warm-subtle px-3 py-1.5 text-xs font-medium text-warm">
+            <span className="w-fit shrink-0 rounded-full bg-warm-subtle px-3 py-1.5 text-xs font-medium text-warm">
               Review mode
             </span>
           </div>
@@ -115,10 +173,10 @@ export default function ChallengeInnovationPage() {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleReviewerChange(tab.id)}
                   className={`rounded-2xl border p-5 text-left transition ${
                     active
-                      ? "border-accent bg-accent-subtle"
+                      ? "border-accent bg-accent-subtle shadow-sm"
                       : "border-border bg-surface hover:bg-background"
                   }`}
                 >
@@ -158,7 +216,7 @@ export default function ChallengeInnovationPage() {
               </div>
 
               <span className="rounded-full bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger">
-                {reviewerTabs.indexOf(reviewer) + 2} issues found
+                {reviewRun ? "Review active" : "Review ready"}
               </span>
             </div>
 
@@ -202,7 +260,7 @@ export default function ChallengeInnovationPage() {
             <div className="mt-10">
               <div className="flex items-end justify-between">
                 <span className="text-6xl font-semibold tracking-tight">
-                  62
+                  {reviewer.score}
                 </span>
 
                 <span className="mb-2 text-sm text-white/50">
@@ -211,7 +269,13 @@ export default function ChallengeInnovationPage() {
               </div>
 
               <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full w-[62%] rounded-full bg-[#B86B52]" />
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${reviewer.score}%`,
+                    backgroundColor: "#B86B52",
+                  }}
+                />
               </div>
 
               <p className="mt-4 text-sm leading-6 text-white/60">
@@ -221,10 +285,25 @@ export default function ChallengeInnovationPage() {
             </div>
 
             <div className="mt-10 space-y-3 border-t border-white/10 pt-6">
-              <ScoreRow label="Novelty exposure" value="Medium" />
-              <ScoreRow label="Evidence exposure" value="High" />
-              <ScoreRow label="Regulatory exposure" value="Medium" />
-              <ScoreRow label="ABS exposure" value="Medium" />
+              <ScoreRow
+                label="Novelty exposure"
+                value={reviewer.novelty}
+              />
+
+              <ScoreRow
+                label="Evidence exposure"
+                value={reviewer.evidence}
+              />
+
+              <ScoreRow
+                label="Regulatory exposure"
+                value={reviewer.regulatory}
+              />
+
+              <ScoreRow
+                label="ABS exposure"
+                value={reviewer.abs}
+              />
             </div>
           </div>
         </section>
@@ -249,6 +328,7 @@ export default function ChallengeInnovationPage() {
 
             <button
               type="button"
+              onClick={handleRerun}
               className="rounded-xl bg-accent px-5 py-3 text-sm font-medium text-white transition hover:bg-accent/90"
             >
               Re-run challenge →

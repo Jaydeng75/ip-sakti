@@ -1,18 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { MOCK_CASE } from "@/lib/mock-data";
-import { getCurrentCase } from "@/lib/case-store";
-
-type CurrentCase = typeof MOCK_CASE;
+import { useCurrentCase } from "@/lib/use-current-case";
 
 export default function SavedCasesPage() {
-  const [currentCase, setCurrentCase] = useState<CurrentCase>(MOCK_CASE);
-
-  useEffect(() => {
-    setCurrentCase(getCurrentCase());
-  }, []);
+  const currentCase = useCurrentCase();
 
   const updatedDate = new Date(currentCase.updatedAt).toLocaleDateString(
     "en-IN"
@@ -77,7 +69,7 @@ export default function SavedCasesPage() {
 
               <Link
                 href="/analyze"
-                className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-accent px-5 text-sm font-medium text-white hover:bg-accent/90"
+                className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-accent px-5 text-sm font-medium text-white transition hover:bg-accent/90"
               >
                 Open case →
               </Link>
