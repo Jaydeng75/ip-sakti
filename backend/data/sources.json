@@ -1,0 +1,112 @@
+[
+  {
+    "id": "india-patents-act-1970",
+    "title": "The Patents Act, 1970",
+    "authority": "Legislative Department, Government of India",
+    "jurisdiction": "India",
+    "effective_date": "1972-04-20",
+    "url": "https://legislative.gov.in/sites/default/files/A1970-39.pdf",
+    "support_status": "primary-law",
+    "summary": "Primary Indian patent statute. Section 3 includes exclusions relevant to traditional knowledge, known properties and admixtures; patentability assessment also requires novelty, inventive step and industrial applicability.",
+    "keywords": ["patent", "novelty", "inventive", "traditional knowledge", "section 3", "admixture", "india"]
+  },
+  {
+    "id": "india-tkdl",
+    "title": "Traditional Knowledge Digital Library",
+    "authority": "CSIR and Ministry of AYUSH, Government of India",
+    "jurisdiction": "India",
+    "effective_date": "2001-01-01",
+    "url": "https://www.tkdl.res.in/",
+    "support_status": "official-reference",
+    "summary": "Official Indian initiative documenting traditional medicinal knowledge for defensive protection and prior-art examination. Public access is limited; a definitive clearance search requires authorized databases and expert review.",
+    "keywords": ["tkdl", "traditional", "ayurveda", "prior art", "classical", "knowledge"]
+  },
+  {
+    "id": "india-biological-diversity-act-2002",
+    "title": "Biological Diversity Act, 2002 and Rules",
+    "authority": "National Biodiversity Authority, Government of India",
+    "jurisdiction": "India",
+    "effective_date": "2003-02-05",
+    "url": "https://nbaindia.org/content/25/19/1/act.html",
+    "support_status": "primary-law",
+    "summary": "Indian biodiversity and access-and-benefit-sharing framework. Applicability depends on the resource, persons involved, access, research, commercial utilization and IP activity; the 2023 amendment and current rules must be checked for the transaction date.",
+    "keywords": ["abs", "biodiversity", "biological resource", "sourcing", "benefit sharing", "nba", "india"]
+  },
+  {
+    "id": "fssai-ayurveda-aahara-2022",
+    "title": "Food Safety and Standards (Ayurveda Aahara) Regulations, 2022",
+    "authority": "Food Safety and Standards Authority of India",
+    "jurisdiction": "India",
+    "effective_date": "2022-05-05",
+    "url": "https://fssai.gov.in/upload/notifications/2022/05/62789a20b54bdGazette_Notification_Ayurveda_Aahara_09_05_2022.pdf",
+    "support_status": "primary-regulation",
+    "summary": "Regulates qualifying Ayurveda Aahara foods, including formulation, claims, labelling and approval considerations. Product classification is fact-specific and therapeutic claims can shift the regulatory pathway.",
+    "keywords": ["food", "ayurveda aahara", "fssai", "claim", "label", "supplement", "india"]
+  },
+  {
+    "id": "drugs-cosmetics-act-india",
+    "title": "Drugs and Cosmetics Act, 1940 and Rules, 1945",
+    "authority": "Central Drugs Standard Control Organisation",
+    "jurisdiction": "India",
+    "effective_date": "1940-04-10",
+    "url": "https://cdsco.gov.in/opencms/opencms/en/Acts-Rules/",
+    "support_status": "primary-law-index",
+    "summary": "Core Indian framework for drugs and cosmetics, including Ayurveda, Siddha and Unani medicines through the Act and Rules. Intended use, ingredients, dosage form and claims determine the applicable pathway.",
+    "keywords": ["drug", "ayush", "cosmetic", "therapeutic", "medicine", "manufacturing", "india"]
+  },
+  {
+    "id": "wipo-gratk-2024",
+    "title": "WIPO Treaty on Intellectual Property, Genetic Resources and Associated Traditional Knowledge",
+    "authority": "World Intellectual Property Organization",
+    "jurisdiction": "International",
+    "effective_date": "Adopted 2024-05-24; entry into force pending treaty conditions",
+    "url": "https://www.wipo.int/en/web/treaties/ip/gratk/index",
+    "support_status": "primary-treaty",
+    "summary": "Treaty adopted in 2024 addressing patent disclosure requirements relating to genetic resources and associated traditional knowledge. Domestic implementation and entry-into-force status must be checked per jurisdiction.",
+    "keywords": ["wipo", "genetic resource", "traditional knowledge", "disclosure", "patent", "international"]
+  },
+  {
+    "id": "cbd-nagoya-protocol",
+    "title": "Nagoya Protocol on Access and Benefit-sharing",
+    "authority": "Convention on Biological Diversity",
+    "jurisdiction": "International",
+    "effective_date": "2014-10-12",
+    "url": "https://www.cbd.int/abs/text/default.shtml",
+    "support_status": "primary-treaty",
+    "summary": "International ABS framework for access to genetic resources and fair and equitable benefit-sharing. Compliance depends on provider-country measures, checkpoints and the facts of access and utilization.",
+    "keywords": ["nagoya", "abs", "genetic resource", "benefit sharing", "traditional knowledge", "international"]
+  },
+  {
+    "id": "eu-traditional-herbal-medicinal-products",
+    "title": "Directive 2004/24/EC on Traditional Herbal Medicinal Products",
+    "authority": "European Union",
+    "jurisdiction": "European Union",
+    "effective_date": "2004-04-30",
+    "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32004L0024",
+    "support_status": "primary-law",
+    "summary": "Provides a simplified registration route for qualifying traditional herbal medicinal products, subject to evidence of traditional use, safety, quality and permitted indications.",
+    "keywords": ["eu", "herbal", "traditional use", "medicine", "registration", "evidence"]
+  },
+  {
+    "id": "us-fda-botanical-drug-guidance",
+    "title": "Botanical Drug Development: Guidance for Industry",
+    "authority": "U.S. Food and Drug Administration",
+    "jurisdiction": "United States",
+    "effective_date": "2016-12-01",
+    "url": "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/botanical-drug-development-guidance-industry",
+    "support_status": "official-guidance",
+    "summary": "FDA guidance for development of botanical drugs, including quality controls, nonclinical and clinical considerations. It is guidance, not a substitute for binding law or product-specific FDA advice.",
+    "keywords": ["us", "fda", "botanical", "drug", "clinical", "evidence", "quality"]
+  },
+  {
+    "id": "wto-trips",
+    "title": "Agreement on Trade-Related Aspects of Intellectual Property Rights",
+    "authority": "World Trade Organization",
+    "jurisdiction": "International",
+    "effective_date": "1995-01-01",
+    "url": "https://www.wto.org/english/docs_e/legal_e/27-trips.pdf",
+    "support_status": "primary-treaty",
+    "summary": "International baseline for IP protection and enforcement among WTO members. National patent, trademark, design and geographical-indication laws implement and may exceed these minimum standards.",
+    "keywords": ["trips", "patent", "trademark", "design", "gi", "international"]
+  }
+]

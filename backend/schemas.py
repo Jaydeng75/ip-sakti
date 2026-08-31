@@ -1,107 +1,128 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from datetime import datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    display_name: str = Field(min_length=2, max_length=120)
+    password: str = Field(min_length=10, max_length=128)
 
 
-class UserCreate(BaseModel):
-    email: str
-    password: str
-    role: str = "user"
-
-
-class UserLogin(BaseModel):
-    email: str
+class LoginRequest(BaseModel):
+    email: EmailStr
     password: str
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     email: str
+    display_name: str
     role: str
 
 
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
 
 class CaseCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    jurisdiction: str = "India"
-    user_id: int
+    title: str = Field(min_length=3, max_length=180)
+    description: str = Field(min_length=20, max_length=20_000)
+    ingredients: list[str] = Field(default_factory=list, max_length=100)
+    product_form: str | None = Field(default=None, max_length=100)
+    intended_use: str | None = Field(default=None, max_length=4_000)
+    target_markets: list[str] = Field(default_factory=lambda: ["India"], max_length=20)
+    classical_formulation: bool = False
+    biological_sourcing: str | None = Field(default=None, max_length=4_000)
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("ingredients", "target_markets")
+    @classmethod
+    def clean_list(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(item.strip() for item in value if item.strip()))
 
 
 class CaseUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    jurisdiction: Optional[str] = None
-    status: Optional[str] = None
+    title: str | None = Field(default=None, min_length=3, max_length=180)
+    description: str | None = Field(default=None, min_length=20, max_length=20_000)
+    status: Literal["draft", "analyzed", "review_requested", "archived"] | None = None
+    ingredients: list[str] | None = Field(default=None, max_length=100)
+    product_form: str | None = Field(default=None, max_length=100)
+    intended_use: str | None = Field(default=None, max_length=4_000)
+    target_markets: list[str] | None = Field(default=None, max_length=20)
+    classical_formulation: bool | None = None
+    biological_sourcing: str | None = Field(default=None, max_length=4_000)
+    metadata_json: dict[str, Any] | None = None
 
 
-
-class ChatCreate(BaseModel):
-    question: str
-
-
-
-
-class CitationResponse(BaseModel):
-    document_id: Optional[int] = None
-    corpus_document_id: Optional[int] = None
-    section: Optional[str] = None
-    page: Optional[int] = None
-    source_url: Optional[str] = None
-    chunk_id: Optional[str] = None
+class CaseResponse(CaseCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    owner_id: int
+    status: str
+    created_at: datetime
+    updated_at: datetime
 
 
+class AnalysisResponse(BaseModel):
+    id: int
+    case_id: int
+    corpus_version: str
+    created_at: datetime
+    result: dict[str, Any]
 
 
-class AIResponse(BaseModel):
-    answer: str
+class AskRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=4_000)
+    language: str = Field(default="English", max_length=40)
+
+
+class Citation(BaseModel):
+    id: str
+    title: str
+    authority: str
     jurisdiction: str
-    confidence: float
-    citations: List[CitationResponse]
-    warnings: List[str]
-    classification: Optional[str] = None
-    needs_expert_review: bool
+    effective_date: str
+    url: str
+    support_status: str
+    excerpt: str
 
 
+class AskResponse(BaseModel):
+    answer: str
+    claim_type: Literal["legal_fact", "interpretation", "inference", "unsupported"]
+    confidence: float = Field(ge=0, le=1)
+    citations: list[Citation]
+    requires_human_review: bool
+    limitations: list[str]
 
 
-class InnovationComponentCreate(BaseModel):
-    ingredient: Optional[str] = None
-    process: Optional[str] = None
-    delivery_mechanism: Optional[str] = None
-    claimed_effect: Optional[str] = None
-    brand: Optional[str] = None
+class ExpertReviewCreate(BaseModel):
+    review_type: Literal["patent", "regulatory", "abs", "scientific", "full"] = "full"
+    notes: str | None = Field(default=None, max_length=2_000)
 
 
+class ExpertReviewResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    case_id: int
+    requested_by: int
+    review_type: str
+    notes: str | None
+    status: str
+    created_at: datetime
 
 
-class ClassificationCreate(BaseModel):
-    classification: str
-    confidence: Optional[float] = None
-    reasoning: Optional[str] = None
-
-
-
-class CorpusDocumentCreate(BaseModel):
-    title: str
-    authority: Optional[str] = None
-    jurisdiction: str = "India"
-    version: Optional[str] = None
-    effective_date: Optional[str] = None
-    source_url: Optional[str] = None
-    document_type: Optional[str] = None
-    namespace: Optional[str] = None
-
-
-
-class AnalysisCreate(BaseModel):
-    result: str
-    confidence: Optional[float] = None
-    evidence_level: Optional[str] = None
-
-
-
-class ReportCreate(BaseModel):
-    title: str
-    content: Optional[str] = None
+class AuditResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int | None
+    action: str
+    entity_type: str
+    entity_id: str | None
+    details: dict[str, Any]
+    created_at: datetime

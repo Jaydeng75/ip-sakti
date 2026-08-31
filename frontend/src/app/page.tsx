@@ -2,17 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
-  const [analyzing, setAnalyzing] = useState(false);
+  const [description, setDescription] = useState("");
+  const router = useRouter();
 
   function analyze() {
-    setAnalyzing(true);
-
-    setTimeout(() => {
-      setAnalyzing(false);
-    }, 4000);
+    if (description.trim()) {
+      window.sessionStorage.setItem("ip-sakti-analysis-draft", description.trim());
+    }
+    router.push("/analyze");
   }
 
   return (
@@ -58,8 +59,8 @@ export default function Home() {
           </h1>
 
           <p className="mt-9 max-w-3xl text-xl leading-8 text-ink-muted md:text-2xl md:leading-9">
-            Tell us about your product. We'll help you understand what's
-            already known, what's new, and what you need to check before
+            Tell us about your product. We&apos;ll help you understand what&apos;s
+            already known, what&apos;s new, and what you need to check before
             taking it further.
           </p>
         </div>
@@ -67,6 +68,8 @@ export default function Home() {
         {/* INNOVATION INPUT */}
         <div className="mt-16 max-w-6xl overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
           <textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
             className="min-h-52 w-full resize-none bg-transparent p-7 text-xl outline-none placeholder:text-ink-muted/40 md:p-9 md:text-2xl"
             placeholder="Tell us about your product..."
           />
@@ -90,7 +93,7 @@ export default function Home() {
               onClick={analyze}
               className="h-12 rounded-xl bg-accent px-7 text-base text-white hover:bg-accent/90"
             >
-              {analyzing ? "Looking into it..." : "Explore my idea →"}
+              Explore my idea →
             </Button>
           </div>
         </div>
@@ -120,7 +123,7 @@ export default function Home() {
         <section className="mt-32">
           <div className="mb-8">
             <p className="font-mono text-sm uppercase tracking-[0.2em] text-accent">
-              A glimpse of what's possible
+              A glimpse of what&apos;s possible
             </p>
 
             <h2 className="mt-3 max-w-3xl font-display text-5xl font-medium leading-[0.95] tracking-tight md:text-7xl">

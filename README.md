@@ -1,37 +1,108 @@
-# IP-SAKTI
+# IP-SAKTI Sahayak 360
 
-The project is organized into:
+Source-grounded innovation intelligence for Ayurvedic and biological-resource products. The application maintains a persistent Innovation Case across traditional knowledge, scientific evidence, IP strategy, regulatory/ABS review, jurisdiction comparison, adversarial review and reports.
 
-- [`frontend/`](frontend/) — Next.js web application
-- [`backend/`](backend/) — FastAPI application and backend services
+## What is implemented
 
-## Frontend development
+- Polished Next.js 16, TypeScript and Tailwind interface with the 11 requested navigation modules.
+- Seven priority workspaces: Dashboard, Analyze Innovation, Traditional Knowledge graph, Scientific Evidence, IP Strategy, Jurisdiction Compare and Challenge My Innovation.
+- Persistent case context shared across modules and a saved-case portfolio.
+- FastAPI API with registration/login, Argon2 password hashing, signed JWT sessions, owner isolation, role checks and audit records.
+- Deterministic grounded screening engine with explicit confidence, source status, jurisdiction, effective date, limitations and safe abstention.
+- Product classification, innovation genome, TK/prior-art graph, evidence separation, multi-route IP strategy, six-step regulatory/ABS flow and India/EU/US/international comparison.
+- Split-screen Ask IP-SAKTI experience with clickable official citations and claim-type labels.
+- Evidence uploads restricted to PDF/TXT/DOCX, size checked, PDF signature checked and stored with SHA-256 integrity metadata.
+- Human expert-review requests and structured case-report exports.
+- SQLite for simple local development and PostgreSQL in the supplied Compose stack.
+- Backend tests, Python linting, frontend linting and production builds.
+
+## Repository layout
+
+```text
+backend/                 FastAPI application, curated source registry and tests
+frontend/                Next.js web application
+docker-compose.yml       Local integrated PostgreSQL + API + web stack
+```
+
+The duplicate `backend 2` prototype, committed bytecode, local databases, vector-store state, copied PDF and empty npm/next marker files were removed. There is now one backend entry point: `backend/main.py`.
+
+## Run the complete stack
+
+1. Copy the root environment template and replace its secrets.
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Start PostgreSQL, API and web application.
+
+   ```bash
+   docker compose up --build
+   ```
+
+3. Open [http://localhost:3000](http://localhost:3000). API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs) in development.
+
+The Compose configuration enables demo authentication for local evaluation only. Production startup rejects demo mode and a default/short signing key.
+
+## Run without Docker
+
+Backend:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn main:app --reload
+```
+
+Frontend, in a second terminal:
 
 ```bash
 cd frontend
-npm install
+npm ci
+cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in a browser.
-
-## Checks
-
-Run the frontend checks from the `frontend/` directory:
+## Verification
 
 ```bash
+cd backend
+ruff check .
+pytest -q
+
+cd ../frontend
 npm run lint
 npm run build
 ```
 
-## Backend development
+## API overview
 
-Run backend commands from the `backend/` directory:
+- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
+- `GET|POST /api/v1/cases`, `GET|PATCH|DELETE /api/v1/cases/{id}`
+- `POST /api/v1/cases/{id}/analyze`, `GET /api/v1/cases/{id}/analysis/latest`
+- `POST /api/v1/cases/{id}/ask`, `GET /api/v1/cases/{id}/challenge`
+- `POST|GET /api/v1/cases/{id}/documents`
+- `POST /api/v1/cases/{id}/expert-review`, `GET /api/v1/cases/{id}/report`
+- `GET /api/v1/sources`, `GET /api/v1/admin/audit`
 
-```bash
-cd backend
-uvicorn main:app --reload
-```
+## Source and decision-safety model
 
-The current backend requires its Python dependencies and PostgreSQL database to
-be configured before startup.
+`backend/data/sources.json` is a versioned curated registry of primary law, official regulation/guidance and treaty sources. The engine does not claim that this small registry is a comprehensive patent, TKDL, scientific-literature or regulatory corpus. If retrieval does not find relevant support, Ask IP-SAKTI abstains. All screening conclusions require human review.
+
+Traditional use is kept explicitly separate from clinically established efficacy. Jurisdictions are not merged into one rule set. Treaty status is described separately from domestic implementation.
+
+## Production deployment checklist
+
+- Set `IPSAKTI_ENVIRONMENT=production`, a random `IPSAKTI_SECRET_KEY`, PostgreSQL TLS credentials and the exact allowed origin list.
+- Keep `IPSAKTI_DEMO_MODE=false`; connect enterprise identity/SSO if public self-registration is inappropriate.
+- Put the API behind TLS, a WAF/API gateway, rate limiting and centralized secret management.
+- Use object storage with malware scanning and retention policies for uploaded evidence.
+- Add managed database backups, schema migration automation, log redaction, monitoring and alerting.
+- Replace/extend the curated registry with licensed patent, TKDL-authorized, legal and scientific corpora; add document-level ingestion, chunk lineage and retrieval evaluation.
+- Configure an approved Bhashini/translation provider and validate legal terminology with bilingual experts before enabling non-English authoritative output.
+- Have qualified patent, regulatory, ABS and scientific experts approve the corpus, rules and disclaimers before real decisions or filings.
+
+This repository is a production-oriented engineering baseline and decision-support prototype. It is not, by itself, a legally complete production service or professional advice.

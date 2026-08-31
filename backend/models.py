@@ -1,433 +1,115 @@
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
-    ForeignKey,
-    DateTime,
-    Float,
-    JSON
-)
-from sqlalchemy.sql import func
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 
 
+def utcnow() -> datetime:
+    return datetime.now(UTC)
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, nullable=False, index=True)
-    password = Column(String, nullable=False)
-    role = Column(String, default="user", nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(120))
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(30), default="analyst")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-
-class SessionToken(Base):
-    __tablename__ = "session_tokens"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id"),
-        nullable=False
-    )
-
-    token = Column(
-        String,
-        unique=True,
-        nullable=False,
-        index=True
-    )
-
-    created_at = Column(DateTime, server_default=func.now())
-    expires_at = Column(DateTime, nullable=True)
+    cases: Mapped[list["InnovationCase"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
 
 
+class InnovationCase(Base):
+    __tablename__ = "innovation_cases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    description: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30), default="draft")
+    ingredients: Mapped[list] = mapped_column(JSON, default=list)
+    product_form: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    intended_use: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_markets: Mapped[list] = mapped_column(JSON, default=list)
+    classical_formulation: Mapped[bool] = mapped_column(Boolean, default=False)
+    biological_sourcing: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    owner: Mapped[User] = relationship(back_populates="cases")
+    analyses: Mapped[list["AnalysisRun"]] = relationship(back_populates="case", cascade="all, delete-orphan")
+    messages: Mapped[list["ChatMessage"]] = relationship(back_populates="case", cascade="all, delete-orphan")
+    documents: Mapped[list["UploadedDocument"]] = relationship(back_populates="case", cascade="all, delete-orphan")
 
 
-class Case(Base):
-    __tablename__ = "cases"
+class AnalysisRun(Base):
+    __tablename__ = "analysis_runs"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("innovation_cases.id", ondelete="CASCADE"), index=True)
+    corpus_version: Mapped[str] = mapped_column(String(80))
+    result: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id"),
-        nullable=False
-    )
-
-    name = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
-
-    jurisdiction = Column(
-        String,
-        default="India",
-        nullable=False
-    )
-
-    status = Column(
-        String,
-        default="active",
-        nullable=False
-    )
-
-    created_at = Column(DateTime, server_default=func.now())
-
-    updated_at = Column(
-        DateTime,
-        server_default=func.now(),
-        onupdate=func.now()
-    )
-
+    case: Mapped[InnovationCase] = relationship(back_populates="analyses")
 
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id"),
-        nullable=True
-    )
-
-    question = Column(Text, nullable=False)
-    answer = Column(Text, nullable=False)
-
-    jurisdiction = Column(
-        String,
-        default="India",
-        nullable=False
-    )
-
-    model_used = Column(String, nullable=True)
-    confidence = Column(Float, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-
-class Document(Base):
-    __tablename__ = "documents"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    filename = Column(String, nullable=False)
-
-    content_type = Column(String, nullable=True)
-
-    file_path = Column(String, nullable=False)
-
-    storage_provider = Column(
-        String,
-        default="local",
-        nullable=False
-    )
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-class CorpusDocument(Base):
-    __tablename__ = "corpus_documents"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    title = Column(String, nullable=False)
-
-    authority = Column(String, nullable=True)
-
-    jurisdiction = Column(
-        String,
-        default="India",
-        nullable=False
-    )
-
-    version = Column(String, nullable=True)
-
-    effective_date = Column(String, nullable=True)
-
-    source_url = Column(Text, nullable=True)
-
-    document_type = Column(String, nullable=True)
-
-    namespace = Column(String, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-
-class InnovationComponent(Base):
-    __tablename__ = "innovation_components"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    ingredient = Column(Text, nullable=True)
-
-    process = Column(Text, nullable=True)
-
-    delivery_mechanism = Column(Text, nullable=True)
-
-    claimed_effect = Column(Text, nullable=True)
-
-    brand = Column(String, nullable=True)
-
-    additional_data = Column(JSON, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-
-class ProductClassification(Base):
-    __tablename__ = "product_classifications"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    classification = Column(
-        String,
-        nullable=False
-    )
-
-    confidence = Column(Float, nullable=True)
-
-    reasoning = Column(Text, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-class Citation(Base):
-    __tablename__ = "citations"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    corpus_document_id = Column(
-        Integer,
-        ForeignKey("corpus_documents.id"),
-        nullable=True
-    )
-
-    document_id = Column(
-        Integer,
-        ForeignKey("documents.id"),
-        nullable=True
-    )
-
-    section = Column(String, nullable=True)
-
-    page = Column(Integer, nullable=True)
-
-    source_url = Column(Text, nullable=True)
-
-    chunk_id = Column(String, nullable=True)
-
-    quote = Column(Text, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-
-class IPAnalysis(Base):
-    __tablename__ = "ip_analyses"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    result = Column(Text, nullable=False)
-
-    confidence = Column(Float, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-class ABSAnalysis(Base):
-    __tablename__ = "abs_analyses"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    result = Column(Text, nullable=False)
-
-    confidence = Column(Float, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-
-class ScientificEvidence(Base):
-    __tablename__ = "scientific_evidence"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    result = Column(Text, nullable=False)
-
-    evidence_level = Column(String, nullable=True)
-
-    confidence = Column(Float, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-class TKPriorArtAnalysis(Base):
-    __tablename__ = "tk_prior_art_analyses"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    result = Column(Text, nullable=False)
-
-    confidence = Column(Float, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-class RegulatoryAnalysis(Base):
-    __tablename__ = "regulatory_analyses"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    result = Column(Text, nullable=False)
-
-    jurisdiction = Column(
-        String,
-        default="India",
-        nullable=False
-    )
-
-    confidence = Column(Float, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
-
-
-class Report(Base):
-    __tablename__ = "reports"
-
-    id = Column(Integer, primary_key=True, index=True)
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=False
-    )
-
-    title = Column(String, nullable=False)
-
-    status = Column(
-        String,
-        default="draft",
-        nullable=False
-    )
-
-    content = Column(Text, nullable=True)
-
-    file_path = Column(String, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-
+    id: Mapped[int] = mapped_column(primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("innovation_cases.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    claim_type: Mapped[str] = mapped_column(String(30))
+    confidence: Mapped[float] = mapped_column()
+    citations: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    case: Mapped[InnovationCase] = relationship(back_populates="messages")
+
+
+class UploadedDocument(Base):
+    __tablename__ = "uploaded_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("innovation_cases.id", ondelete="CASCADE"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    stored_name: Mapped[str] = mapped_column(String(80), unique=True)
+    media_type: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    sha256: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    case: Mapped[InnovationCase] = relationship(back_populates="documents")
+
+
+class ExpertReviewRequest(Base):
+    __tablename__ = "expert_review_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("innovation_cases.id", ondelete="CASCADE"), index=True)
+    requested_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    review_type: Mapped[str] = mapped_column(String(60))
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="requested")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    id = Column(Integer, primary_key=True, index=True)
-
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id"),
-        nullable=True
-    )
-
-    case_id = Column(
-        Integer,
-        ForeignKey("cases.id"),
-        nullable=True
-    )
-
-    action = Column(String, nullable=False)
-
-    query = Column(Text, nullable=True)
-
-    retrieved_sources = Column(JSON, nullable=True)
-
-    model_used = Column(String, nullable=True)
-
-    corpus_version = Column(String, nullable=True)
-
-    generated_response = Column(Text, nullable=True)
-
-    created_at = Column(DateTime, server_default=func.now())
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(100), index=True)
+    entity_type: Mapped[str] = mapped_column(String(80))
+    entity_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

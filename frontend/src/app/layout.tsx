@@ -1,5 +1,10 @@
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "IP-SAKTI 360 — Innovation Intelligence",
+  description: "Source-grounded IP, traditional knowledge, evidence, regulatory and ABS decision support.",
+};
 
 export default function RootLayout({
   children,
@@ -9,10 +14,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="min-w-0 flex-1">{children}</main>
-        </div>
+        {children}
       </body>
     </html>
   );

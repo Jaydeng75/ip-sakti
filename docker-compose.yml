@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ipsakti
+      POSTGRES_USER: ipsakti
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-only-change-me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ipsakti -d ipsakti"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      IPSAKTI_ENVIRONMENT: development
+      IPSAKTI_SECRET_KEY: ${IPSAKTI_SECRET_KEY:-local-development-secret-key-change-before-deploy}
+      IPSAKTI_DATABASE_URL: postgresql+psycopg://ipsakti:${POSTGRES_PASSWORD:-local-dev-only-change-me}@db:5432/ipsakti
+      IPSAKTI_ALLOWED_ORIGINS: http://localhost:3000
+      IPSAKTI_DEMO_MODE: "true"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - evidence_uploads:/app/data/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  evidence_uploads:

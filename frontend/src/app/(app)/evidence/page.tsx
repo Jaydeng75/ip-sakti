@@ -1,234 +1,39 @@
-import {
-  MOCK_EVIDENCE,
-  MOCK_GENOME_NODES,
-} from "@/lib/mock-data";
+"use client";
+
+import { AnalysisState, ModuleHeader } from "@/components/analysis-state";
+import { useState } from "react";
+import { caseApi } from "@/lib/api";
+import { useCurrentAnalysis } from "@/lib/use-current-analysis";
+import { useCurrentCase } from "@/lib/use-current-case";
 
 export default function ScientificEvidencePage() {
-  const traditional = MOCK_GENOME_NODES.filter(
-    (node) => node.layer === "traditional"
-  );
-
-  const scientific = MOCK_GENOME_NODES.filter(
-    (node) => node.layer === "evidence"
-  );
-
+  const { analysis, loading, error } = useCurrentAnalysis();
+  const currentCase = useCurrentCase();
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const evidence = analysis?.result.scientific_evidence;
   return (
-    <main className="min-h-screen bg-background text-ink">
-      <div className="mx-auto max-w-6xl px-6 py-10 md:px-10 md:py-14">
-        {/* HEADER */}
-        <header className="border-b border-border pb-8">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent">
-            IP-SAKTI 360 / Scientific Evidence
-          </p>
-
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
-            What does the evidence actually say?
-          </h1>
-
-          <p className="mt-3 max-w-2xl text-base leading-7 text-ink-muted">
-            Separate traditional use from modern scientific evidence, see
-            where confidence is strong, and identify claims that still need
-            support.
-          </p>
-        </header>
-
-        {/* WARNING */}
-        <section className="mt-8 rounded-2xl border border-warm/20 bg-warm-subtle p-5">
-          <p className="text-sm font-semibold text-warm">
-            Important distinction
-          </p>
-
-          <p className="mt-2 text-sm leading-6 text-ink-muted">
-            Traditional use is not equivalent to clinically established
-            efficacy. IP-SAKTI keeps these evidence types separate.
-          </p>
-        </section>
-
-        {/* SUMMARY */}
-        <section className="mt-8 grid gap-4 sm:grid-cols-3">
-          <Summary
-            value={String(traditional.length)}
-            label="Traditional-use findings"
-          />
-
-          <Summary
-            value={String(scientific.length)}
-            label="Scientific findings"
-          />
-
-          <Summary
-            value={String(MOCK_EVIDENCE.length)}
-            label="Sources reviewed"
-          />
-        </section>
-
-        {/* TRADITIONAL USE */}
-        <section className="mt-10">
-          <SectionTitle
-            eyebrow="01 / Traditional use"
-            title="What has been traditionally documented?"
-          />
-
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {traditional.map((item) => (
-              <EvidenceCard
-                key={item.id}
-                title={item.label}
-                description={item.description}
-                status="Traditional use"
-                confidence={item.confidence}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* SCIENTIFIC */}
-        <section className="mt-10">
-          <SectionTitle
-            eyebrow="02 / Scientific evidence"
-            title="What has modern research found?"
-          />
-
-          <div className="mt-5 space-y-4">
-            {scientific.map((item) => (
-              <EvidenceCard
-                key={item.id}
-                title={item.label}
-                description={item.description}
-                status={
-                  item.status === "needs-evidence"
-                    ? "Needs evidence"
-                    : "Supported finding"
-                }
-                confidence={item.confidence}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* SOURCES */}
-        <section className="mt-10">
-          <SectionTitle
-            eyebrow="03 / Sources"
-            title="Evidence behind the analysis"
-          />
-
-          <div className="mt-5 space-y-3">
-            {MOCK_EVIDENCE.map((item, index) => (
-              <div
-                key={`${item.source}-${index}`}
-                className="rounded-2xl border border-border bg-surface p-5"
-              >
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold leading-5">
-                      {item.source}
-                    </p>
-
-                    <p className="mt-2 text-xs text-ink-muted">
-                      {item.authority}
-                    </p>
-
-                    <p className="mt-1 text-xs leading-5 text-ink-muted">
-                      {item.section}
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${
-                        item.status === "supports"
-                          ? "bg-accent-subtle text-accent"
-                          : item.status === "inference"
-                            ? "bg-warm-subtle text-warm"
-                            : "bg-danger/10 text-danger"
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-
-                    <span className="rounded-full bg-ink/5 px-2.5 py-1 text-[10px] font-medium text-ink-muted">
-                      {item.confidence}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    </main>
-  );
-}
-
-function SectionTitle({
-  eyebrow,
-  title,
-}: {
-  eyebrow: string;
-  title: string;
-}) {
-  return (
-    <div>
-      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
-        {eyebrow}
-      </p>
-
-      <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">
-        {title}
-      </h2>
+    <div className="py-8 md:py-10">
+      <ModuleHeader eyebrow="Scientific Evidence" title="What does the evidence actually establish?" description="Traditional use, modern research, safety and confidence remain separate so a historic-use record is never presented as clinical proof." />
+      {!evidence ? <AnalysisState loading={loading} error={error} /> : (
+        <>
+          <section className="mt-8 rounded-2xl border border-warm/30 bg-warm-subtle p-5"><p className="text-sm font-semibold text-warm">Important evidence boundary</p><p className="mt-2 text-base leading-6 text-ink">{evidence.notice}</p></section>
+          <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <EvidenceCard number="01" title="Traditional-use claims" status={evidence.traditional_use.status} summary={evidence.traditional_use.summary} confidence={evidence.traditional_use.confidence} />
+            <EvidenceCard number="02" title="Modern scientific evidence" status={evidence.modern_science.status} summary={evidence.modern_science.summary} confidence={evidence.modern_science.confidence} />
+            <EvidenceCard number="03" title="Safety information" status={evidence.safety.status} summary={evidence.safety.summary} confidence={evidence.safety.confidence} />
+            <div className="rounded-2xl border border-border bg-[#16212B] p-6 text-white"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/50">04 / Evidence confidence</p><p className="mt-5 text-3xl font-semibold">{Math.round(evidence.confidence.score * 100)}%</p><p className="mt-2 text-sm font-medium">{evidence.confidence.label}</p><p className="mt-3 text-xs leading-5 text-white/60">{evidence.confidence.basis}</p></div>
+          </section>
+          <section className="mt-10 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+            <div className="rounded-3xl border border-border bg-surface p-6"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Evidence gaps</p><h2 className="mt-2 text-2xl font-semibold">What is still missing?</h2><div className="mt-5 space-y-3">{evidence.gaps.map((gap, index) => <div key={gap} className="flex gap-3 rounded-xl border border-border bg-background p-4"><span className="font-mono text-[10px] text-accent">{String(index + 1).padStart(2, "0")}</span><p className="text-sm">{gap}</p></div>)}</div></div>
+            <div className="rounded-3xl border border-border bg-surface p-6"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Official references</p><h2 className="mt-2 text-2xl font-semibold">Sources supporting this screening</h2><div className="mt-5 space-y-3">{evidence.citations.map((source) => <a key={source.id} href={source.url} target="_blank" rel="noreferrer" className="block rounded-xl border border-border bg-background p-4 transition hover:border-accent"><div className="flex justify-between gap-4"><p className="text-sm font-semibold">{source.title}</p><span className="font-mono text-[9px] text-ink-muted">{source.jurisdiction}</span></div><p className="mt-2 text-xs text-ink-muted">{source.authority} · {source.support_status}</p><p className="mt-3 text-xs leading-5 text-ink-muted">{source.excerpt}</p></a>)}</div></div>
+          </section>
+          <section className="mt-8 rounded-3xl border border-border bg-surface p-6"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Case evidence vault</p><h2 className="mt-2 text-xl font-semibold">Attach a controlled evidence document</h2><p className="mt-2 text-xs text-ink-muted">PDF, TXT or DOCX · maximum 10 MB · stored with a SHA-256 integrity record</p></div><label className="cursor-pointer rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white"><input type="file" accept=".pdf,.txt,.docx" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (!file || !currentCase.backendId) return; setUploadStatus("Uploading and hashing…"); void caseApi.uploadDocument(currentCase.backendId, file).then((document) => setUploadStatus(`Stored ${document.filename} · ${document.sha256.slice(0, 12)}…`)).catch((caught: unknown) => setUploadStatus(caught instanceof Error ? caught.message : "Upload failed.")); }} />Attach evidence</label></div>{uploadStatus && <p role="status" className="mt-4 rounded-xl border border-border bg-background p-3 text-xs text-ink-muted">{uploadStatus}</p>}</section>
+        </>
+      )}
     </div>
   );
 }
 
-function Summary({
-  value,
-  label,
-}: {
-  value: string;
-  label: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-6">
-      <p className="text-3xl font-semibold tracking-tight">{value}</p>
-
-      <p className="mt-2 text-sm text-ink-muted">{label}</p>
-    </div>
-  );
-}
-
-function EvidenceCard({
-  title,
-  description,
-  status,
-  confidence,
-}: {
-  title: string;
-  description: string;
-  status: string;
-  confidence: "High" | "Medium" | "Low";
-}) {
-  return (
-    <article className="rounded-2xl border border-border bg-surface p-6 transition hover:shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-base font-semibold tracking-tight">
-          {title}
-        </h3>
-
-        <div className="flex gap-2">
-          <span className="rounded-full bg-accent-subtle px-2.5 py-1 text-[10px] font-medium text-accent">
-            {status}
-          </span>
-
-          <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-medium text-ink-muted">
-            {confidence} confidence
-          </span>
-        </div>
-      </div>
-
-      <p className="mt-4 text-sm leading-7 text-ink-muted">
-        {description}
-      </p>
-    </article>
-  );
+function EvidenceCard({ number, title, status, summary, confidence }: { number: string; title: string; status: string; summary: string; confidence: number }) {
+  return <article className="rounded-2xl border border-border bg-surface p-6"><div className="flex items-center justify-between"><span className="font-mono text-[10px] text-accent">{number}</span><span className="rounded-full bg-accent-subtle px-2 py-1 font-mono text-[9px] uppercase text-accent">{status.replaceAll("_", " ")}</span></div><h2 className="mt-5 text-lg font-semibold">{title}</h2><p className="mt-3 text-sm leading-6 text-ink-muted">{summary}</p><div className="mt-5 h-1.5 rounded-full bg-accent-subtle"><div className="h-full rounded-full bg-accent" style={{ width: `${confidence * 100}%` }} /></div><p className="mt-2 font-mono text-[9px] text-ink-muted">{Math.round(confidence * 100)}% screening confidence</p></article>;
 }

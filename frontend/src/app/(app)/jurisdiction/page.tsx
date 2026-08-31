@@ -1,245 +1,28 @@
-import { MOCK_CASE } from "@/lib/mock-data";
+"use client";
 
-const jurisdictions = [
-  {
-    name: "India",
-    code: "IN",
-    patent: "Traditional-knowledge screening is important",
-    traditional: "High relevance",
-    regulation: "AYUSH + biodiversity requirements",
-    evidence: "Product-specific evidence may be needed",
-    market: "Medium complexity",
-    highlight: true,
-  },
-  {
-    name: "European Union",
-    code: "EU",
-    patent: "Novelty and inventive step",
-    traditional: "Prior-art review recommended",
-    regulation: "Depends on product classification",
-    evidence: "Claims must match permitted framework",
-    market: "High complexity",
-    highlight: false,
-  },
-  {
-    name: "United States",
-    code: "US",
-    patent: "Novelty + non-obviousness",
-    traditional: "Prior-art considerations",
-    regulation: "Classification determines pathway",
-    evidence: "Claim-specific support important",
-    market: "High complexity",
-    highlight: false,
-  },
-  {
-    name: "Japan",
-    code: "JP",
-    patent: "Novelty and inventive step",
-    traditional: "Traditional-use context may matter",
-    regulation: "Product classification driven",
-    evidence: "Evidence requirements vary",
-    market: "Medium-high complexity",
-    highlight: false,
-  },
-];
+import { AnalysisState, ModuleHeader } from "@/components/analysis-state";
+import { useCurrentAnalysis } from "@/lib/use-current-analysis";
+import { useCurrentCase } from "@/lib/use-current-case";
 
 export default function JurisdictionPage() {
+  const currentCase = useCurrentCase();
+  const { analysis, loading, error } = useCurrentAnalysis();
+  const markets = analysis?.result.jurisdictions;
   return (
-    <main className="min-h-screen bg-background text-ink">
-      <div className="mx-auto max-w-7xl px-6 py-10 md:px-10 md:py-14">
-        {/* HEADER */}
-        <header className="border-b border-border pb-8">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent">
-            IP-SAKTI 360 / Jurisdiction Compare
-          </p>
-
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
-            Where should you take it?
-          </h1>
-
-          <p className="mt-3 max-w-2xl text-base leading-7 text-ink-muted">
-            Compare how your innovation may be treated across different
-            markets before deciding where to focus your next move.
-          </p>
-        </header>
-
-        {/* CASE */}
-        <section className="mt-8 rounded-3xl border border-border bg-surface p-6 md:p-8">
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
-            Current case
-          </p>
-
-          <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                Herbal stress-management formulation
-              </h2>
-
-              <p className="mt-2 text-sm text-ink-muted">
-                Current jurisdiction: {MOCK_CASE.jurisdiction}
-              </p>
-            </div>
-
-            <span className="rounded-full bg-accent-subtle px-3 py-1.5 text-xs font-medium text-accent">
-              {MOCK_CASE.productType}
-            </span>
-          </div>
-        </section>
-
-        {/* COMPARISON */}
-        <section className="mt-10">
-          <div className="mb-6">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
-              Market comparison
-            </p>
-
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">
-              One innovation. Four regulatory landscapes.
-            </h2>
-          </div>
-
-          <div className="overflow-x-auto rounded-3xl border border-border bg-surface">
-            <table className="w-full min-w-[950px] border-collapse text-left">
-              <thead>
-                <tr className="border-b border-border bg-background">
-                  <th className="w-52 p-5 font-mono text-[10px] uppercase tracking-[0.15em] text-ink-muted">
-                    Area
-                  </th>
-
-                  {jurisdictions.map((market) => (
-                    <th
-                      key={market.code}
-                      className="p-5 align-top"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[10px] text-ink-muted">
-                          {market.code}
-                        </span>
-
-                        <span className="text-sm font-semibold">
-                          {market.name}
-                        </span>
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                <ComparisonRow
-                  label="Patent"
-                  values={jurisdictions.map((item) => item.patent)}
-                  active={jurisdictions.map((item) => item.highlight)}
-                />
-
-                <ComparisonRow
-                  label="Traditional knowledge"
-                  values={jurisdictions.map((item) => item.traditional)}
-                  active={jurisdictions.map((item) => item.highlight)}
-                />
-
-                <ComparisonRow
-                  label="Regulation"
-                  values={jurisdictions.map((item) => item.regulation)}
-                  active={jurisdictions.map((item) => item.highlight)}
-                />
-
-                <ComparisonRow
-                  label="Evidence"
-                  values={jurisdictions.map((item) => item.evidence)}
-                  active={jurisdictions.map((item) => item.highlight)}
-                />
-
-                <ComparisonRow
-                  label="Market entry"
-                  values={jurisdictions.map((item) => item.market)}
-                  active={jurisdictions.map((item) => item.highlight)}
-                  last
-                />
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* TAKEAWAY */}
-        <section className="mt-8 grid gap-6 md:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-3xl border border-border bg-[#16212B] p-7 text-white md:p-8">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/50">
-              Current signal
-            </p>
-
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight">
-              India should be your first review point.
-            </h2>
-
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65">
-              Your current case is structured around the Indian market, so
-              classification, traditional knowledge, biodiversity and IP
-              questions should be resolved before comparing expansion routes.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-border bg-surface p-7 md:p-8">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
-              Compare before deciding
-            </p>
-
-            <div className="mt-5 space-y-3">
-              <NextStep text="Check patentability" />
-              <NextStep text="Review evidence requirements" />
-              <NextStep text="Compare regulatory burden" />
-              <NextStep text="Assess market-entry complexity" />
-            </div>
-          </div>
-        </section>
-
-        <p className="mt-8 text-center text-xs text-ink-muted">
-          This comparison is a prototype and does not constitute legal or
-          regulatory advice.
-        </p>
-      </div>
-    </main>
-  );
-}
-
-function ComparisonRow({
-  label,
-  values,
-  active,
-  last = false,
-}: {
-  label: string;
-  values: string[];
-  active: boolean[];
-  last?: boolean;
-}) {
-  return (
-    <tr className={last ? "" : "border-b border-border"}>
-      <td className="p-5 align-top text-sm font-medium text-ink">
-        {label}
-      </td>
-
-      {values.map((value, index) => (
-        <td
-          key={`${label}-${index}`}
-          className={`p-5 align-top text-sm leading-6 ${
-            active[index]
-              ? "bg-accent-subtle/40 text-ink"
-              : "text-ink-muted"
-          }`}
-        >
-          {value}
-        </td>
-      ))}
-    </tr>
-  );
-}
-
-function NextStep({ text }: { text: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-border px-4 py-3">
-      <span className="h-2 w-2 rounded-full bg-accent" />
-      <span className="text-sm">{text}</span>
+    <div className="py-8 md:py-10">
+      <ModuleHeader eyebrow="Jurisdiction Compare" title="One innovation. Different legal landscapes." description="Compare patent, traditional-knowledge, regulatory, evidence and market-entry questions while keeping territorial rules clearly separated." />
+      {!markets ? <AnalysisState loading={loading} error={error} /> : (
+        <>
+          <section className="mt-8 rounded-3xl border border-border bg-surface p-6"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Current case</p><h2 className="mt-2 text-2xl font-semibold">{currentCase.title}</h2><p className="mt-2 text-sm text-ink-muted">Requested markets: {currentCase.jurisdiction}</p></div><span className="rounded-full bg-accent-subtle px-3 py-1.5 text-xs font-medium text-accent">{currentCase.productType}</span></div></section>
+          <section className="mt-10"><div className="mb-6"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Territorial comparison</p><h2 className="mt-2 text-2xl font-semibold">Review each column independently.</h2></div><div className="overflow-x-auto rounded-3xl border border-border bg-surface"><table className="w-full min-w-[1050px] border-collapse text-left"><thead><tr className="border-b border-border bg-background"><th className="w-48 p-5 font-mono text-[10px] uppercase tracking-[0.15em] text-ink-muted">Area</th>{markets.map((market) => <th key={market.name} className={market.selected ? "bg-accent-subtle/50 p-5" : "p-5"}><div className="flex items-center gap-2"><span className="text-sm font-semibold">{market.name}</span>{market.selected && <span className="rounded-full bg-accent px-2 py-0.5 font-mono text-[8px] uppercase text-white">target</span>}</div></th>)}</tr></thead><tbody><Comparison label="Patent issues" values={markets.map((item) => item.patent)} active={markets.map((item) => item.selected)} /><Comparison label="Traditional knowledge" values={markets.map((item) => item.tk)} active={markets.map((item) => item.selected)} /><Comparison label="Regulatory pathway" values={markets.map((item) => item.regulation)} active={markets.map((item) => item.selected)} /><Comparison label="Evidence requirements" values={markets.map((item) => item.evidence)} active={markets.map((item) => item.selected)} /><Comparison label="Market-entry complexity" values={markets.map((item) => item.market_entry)} active={markets.map((item) => item.selected)} last /></tbody></table></div></section>
+          <section className="mt-8 grid gap-4 md:grid-cols-2">{markets.filter((market) => market.selected).map((market) => <div key={market.name} className="rounded-2xl border border-border bg-surface p-6"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">{market.name} sources</p><div className="mt-4 space-y-2">{market.citations.map((source) => <a key={source.id} href={source.url} target="_blank" rel="noreferrer" className="block rounded-xl border border-border bg-background p-3 text-xs font-medium hover:border-accent hover:text-accent">{source.title} ↗<span className="mt-1 block font-normal text-ink-muted">{source.support_status} · {source.effective_date}</span></a>)}</div></div>)}</section>
+          <p className="mt-8 text-center text-xs text-ink-muted">This is a screening comparison, not a freedom-to-operate opinion, filing opinion or market authorization.</p>
+        </>
+      )}
     </div>
   );
+}
+
+function Comparison({ label, values, active, last = false }: { label: string; values: string[]; active: boolean[]; last?: boolean }) {
+  return <tr className={last ? "" : "border-b border-border"}><td className="p-5 align-top text-sm font-semibold">{label}</td>{values.map((value, index) => <td key={`${label}-${index}`} className={`p-5 align-top text-sm leading-6 ${active[index] ? "bg-accent-subtle/25 text-ink" : "text-ink-muted"}`}>{value}</td>)}</tr>;
 }

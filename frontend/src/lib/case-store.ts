@@ -1,22 +1,22 @@
-import { MOCK_CASE } from "@/lib/mock-data";
+import { Case, DEFAULT_CASE } from "@/lib/case-data";
 
 const CASE_STORAGE_KEY = "ip-sakti-current-case";
 
 export function getCurrentCase() {
   if (typeof window === "undefined") {
-    return MOCK_CASE;
+    return DEFAULT_CASE;
   }
 
   const stored = window.localStorage.getItem(CASE_STORAGE_KEY);
 
   if (!stored) {
-    return MOCK_CASE;
+    return DEFAULT_CASE;
   }
 
   try {
     return JSON.parse(stored);
   } catch {
-    return MOCK_CASE;
+    return DEFAULT_CASE;
   }
 }
 
@@ -35,5 +35,13 @@ export function saveCurrentCase(description: string) {
     JSON.stringify(updatedCase)
   );
 
+  window.dispatchEvent(new Event("ip-sakti:case-updated"));
+
   return updatedCase;
+}
+
+export function saveCaseSnapshot(currentCase: Case) {
+  window.localStorage.setItem(CASE_STORAGE_KEY, JSON.stringify(currentCase));
+  window.dispatchEvent(new Event("ip-sakti:case-updated"));
+  return currentCase;
 }
