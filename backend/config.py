@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     registration_enabled: bool = True
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
-    corpus_version: str = "2026-08-31.official-registry.2"
+    corpus_version: str = "2026-09-01.official-registry.3"
     embedding_provider: str = "deterministic"
     embedding_url: str = "http://localhost:8081/v1"
     embedding_api_key: str | None = None
@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     reranker_timeout_seconds: float = 60.0
     source_monitor_timeout_seconds: float = 15.0
     source_monitor_max_bytes: int = 5 * 1024 * 1024
+    external_research_enabled: bool = False
+    external_research_timeout_seconds: float = 20.0
+    external_research_max_results: int = 5
+    ncbi_api_key: str | None = None
+    ncbi_contact_email: str | None = None
+    epo_ops_consumer_key: str | None = None
+    epo_ops_consumer_secret: str | None = None
     otel_enabled: bool = False
     otel_service_name: str = "ip-sakti-api"
     otel_exporter_endpoint: str | None = None

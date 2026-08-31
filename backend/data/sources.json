@@ -108,5 +108,77 @@
     "support_status": "primary-treaty",
     "summary": "International baseline for IP protection and enforcement among WTO members. National patent, trademark, design and geographical-indication laws implement and may exceed these minimum standards.",
     "keywords": ["trips", "patent", "trademark", "design", "gi", "international"]
+  },
+  {
+    "id": "epo-open-patent-services",
+    "title": "EPO Open Patent Services",
+    "authority": "European Patent Office",
+    "jurisdiction": "International patent data",
+    "effective_date": "Current service; checked 2026-09-01",
+    "url": "https://www.epo.org/en/searching-for-patents/data/web-services/ops",
+    "support_status": "official-live-data-service",
+    "summary": "Official EPO web service for bibliographic, family, legal-event and published-document data. IP-SAKTI uses credentialed OPS results for family-aware and claim-level screening.",
+    "locator": "OPS REST services / published-data",
+    "keywords": ["epo", "ops", "patent family", "claims", "prior art", "legal status"]
+  },
+  {
+    "id": "epo-epc-article-52",
+    "title": "European Patent Convention — Article 52",
+    "authority": "European Patent Office",
+    "jurisdiction": "European Patent Organisation",
+    "effective_date": "EPC 2020 edition",
+    "url": "https://www.epo.org/en/legal/epc/2020/a52.html",
+    "support_status": "primary-law",
+    "summary": "Sets the EPC baseline that European patents are granted for inventions that are new, involve an inventive step and are susceptible of industrial application, subject to exclusions.",
+    "locator": "Article 52",
+    "keywords": ["europe", "epc", "patentability", "novelty", "inventive step", "industrial application"]
+  },
+  {
+    "id": "us-title-35-section-102",
+    "title": "35 U.S.C. § 102 — Conditions for patentability; novelty",
+    "authority": "United States Patent and Trademark Office",
+    "jurisdiction": "United States",
+    "effective_date": "Current consolidated text; checked 2026-09-01",
+    "url": "https://www.uspto.gov/web/offices/pac/mpep/mpep-9015-appx-l.html#d0e302449",
+    "support_status": "primary-law-reference",
+    "summary": "United States novelty provision used with the complete statute, MPEP guidance and current case law for product-specific analysis.",
+    "locator": "35 U.S.C. 102",
+    "keywords": ["us", "patent", "novelty", "prior art", "section 102"]
+  },
+  {
+    "id": "uspto-open-data-portal",
+    "title": "USPTO Open Data Portal API Catalog",
+    "authority": "United States Patent and Trademark Office",
+    "jurisdiction": "United States",
+    "effective_date": "Current service; checked 2026-09-01",
+    "url": "https://data.uspto.gov/apis/bulk-data/search",
+    "support_status": "official-live-data-service",
+    "summary": "Official USPTO API catalog. Registered API access can supplement EPO family screening with United States patent data and prosecution records.",
+    "locator": "API catalog",
+    "keywords": ["uspto", "patent", "api", "claims", "application", "prosecution"]
+  },
+  {
+    "id": "ncbi-pubmed-eutilities",
+    "title": "NCBI Entrez Programming Utilities",
+    "authority": "U.S. National Library of Medicine",
+    "jurisdiction": "International scientific literature",
+    "effective_date": "Current service; checked 2026-09-01",
+    "url": "https://www.ncbi.nlm.nih.gov/books/NBK25499/",
+    "support_status": "official-live-data-service",
+    "summary": "Official NCBI API used to retrieve PubMed records and abstracts for transparent extraction of population, dose, endpoints and stated limitations.",
+    "locator": "ESearch and EFetch",
+    "keywords": ["pubmed", "ncbi", "clinical", "study", "dose", "endpoint", "population", "limitations"]
+  },
+  {
+    "id": "india-patent-office-manual",
+    "title": "Manual of Patent Office Practice and Procedure",
+    "authority": "Office of the Controller General of Patents, Designs and Trade Marks",
+    "jurisdiction": "India",
+    "effective_date": "Version 3.0, 2019",
+    "url": "https://www.ipindia.gov.in/frontend/pdf/patents/Manual_for_Patent_Office_Practice_and_Procedure_.pdf",
+    "support_status": "official-office-manual",
+    "summary": "Indian Patent Office practice manual used as procedural guidance alongside the Patents Act, Rules, current office notices and case law.",
+    "locator": "Patentability and examination chapters",
+    "keywords": ["india", "patent office", "manual", "examination", "prior art", "claims"]
   }
 ]

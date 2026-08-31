@@ -4,8 +4,10 @@ from pathlib import Path
 from typing import Any
 
 from config import settings
-from services.assurance import build_claim_evidence_graph, build_design_around
+from services.assurance import build_claim_evidence_graph
 from services.evidence import evidence_citation, retrieval_status
+from services.research import run_external_research
+from services.specificity import build_case_specific_analysis, build_specific_design_around
 
 SOURCE_PATH = Path(__file__).resolve().parents[1] / "data" / "sources.json"
 DISCLAIMER = (
@@ -34,6 +36,7 @@ def public_citation(source_id: str, excerpt: str | None = None) -> dict[str, str
         "support_status": source["support_status"],
         "excerpt": excerpt or source["summary"],
         "source_type": "official",
+        "locator": source.get("locator"),
     }
 
 
@@ -45,6 +48,7 @@ def _text(case: Any) -> str:
         case.intended_use or "",
         case.biological_sourcing or "",
         " ".join(case.ingredients or []),
+        " ".join(str(value) for value in (case.metadata_json or {}).values() if value),
     ]
     return " ".join(fields).lower()
 
@@ -54,8 +58,13 @@ def _contains(text: str, words: list[str]) -> bool:
 
 
 def classify_product(case: Any) -> dict[str, Any]:
-    text = _text(case)
-    therapeutic = _contains(text, ["treat", "cure", "prevent", "therapy", "disease", "pain", "diabetes"])
+    text = " ".join(
+        value.lower()
+        for value in [case.title, case.description, case.product_form or "", case.intended_use or "", _metadata_claim(case)]
+        if value
+    )
+    non_disease_claim = _contains(text, ["without a disease-treatment claim", "without a disease treatment claim", "non-therapeutic claim"])
+    therapeutic = _contains(text, ["treat", "cure", "prevent", "therapy", "disease", "pain", "diabetes"]) and not non_disease_claim
     food = _contains(text, ["food", "drink", "tea", "beverage", "nutrition", "supplement", "edible"])
     cosmetic = _contains(text, ["cosmetic", "skin", "hair", "cream", "serum", "shampoo"])
     if therapeutic:
@@ -73,6 +82,11 @@ def classify_product(case: Any) -> dict[str, Any]:
         pathway = "Classification depends on composition, presentation and whether claims remain cosmetic rather than therapeutic."
         confidence = 0.68
         citation_ids = ["drugs-cosmetics-act-india"]
+    elif _contains(text, ["wellbeing", "wellness", "stress", "resilience", "support"]):
+        label = "Potential wellness/nutraceutical or proprietary AYUSH product"
+        pathway = "The submitted non-disease support claim, dosage form and botanical composition require a documented FSSAI-versus-AYUSH classification decision before labelling or evidence planning."
+        confidence = 0.63
+        citation_ids = ["fssai-ayurveda-aahara-2022", "drugs-cosmetics-act-india"]
     else:
         label = "Classification unresolved"
         pathway = (
@@ -87,6 +101,10 @@ def classify_product(case: Any) -> dict[str, Any]:
         "requires_human_review": True,
         "citations": [public_citation(item) for item in citation_ids],
     }
+
+
+def _metadata_claim(case: Any) -> str:
+    return str((case.metadata_json or {}).get("proposed_claim", ""))
 
 
 def build_genome(case: Any) -> dict[str, Any]:
@@ -630,31 +648,66 @@ def analyze_case(
     risks = build_risks(case)
     ip_strategy = build_ip_strategy(case)
     challenges = build_challenges(case, evidence_matches)
+    external_research = run_external_research(case)
+    specific = build_case_specific_analysis(case, evidence_matches, external_research)
     claim_graph = build_claim_evidence_graph(classification, risks, challenges)
-    design_around = build_design_around(
+    design_around = build_specific_design_around(
         case,
-        ip_strategy,
-        challenges,
+        specific,
+        ip_strategy["recommended_strategy"],
         [
             public_citation("india-patents-act-1970"),
             public_citation("india-tkdl"),
             public_citation("india-biological-diversity-act-2002"),
         ],
     )
+    knowledge_graph = build_knowledge_graph(case, evidence_matches)
+    for index, patent in enumerate(specific["patent_landscape"].get("records", [])[:4]):
+        node_id = f"live-patent-{index}"
+        knowledge_graph["nodes"].append(
+            {
+                "id": node_id,
+                "label": f"{patent.get('publication_number')}: {patent.get('title')}",
+                "type": "patent",
+                "risk": "live_evidence",
+            }
+        )
+        knowledge_graph["edges"].append(
+            {"id": f"kg-p-{index}", "source": node_id, "target": "user-invention", "label": "retrieved claim comparison"}
+        )
+    for index, record in enumerate(specific["traditional_knowledge"]["records"][:4]):
+        node_id = f"exact-tk-{index}"
+        knowledge_graph["nodes"].append(
+            {"id": node_id, "label": f"{record['source_title']} · {record.get('locator') or 'passage'}", "type": "traditional_text", "risk": "evidence"}
+        )
+        knowledge_graph["edges"].append(
+            {"id": f"kg-tk-{index}", "source": node_id, "target": "user-invention", "label": "exact retrieved passage"}
+        )
+    patent_status = specific["patent_landscape"].get("status", "not run")
+    completeness = specific["input_completeness"]
+    scientific_evidence = build_evidence(case, evidence_matches)
+    scientific_evidence["study_matrix"] = specific["scientific_studies"]
+    scientific_evidence["traditional_knowledge_records"] = specific["traditional_knowledge"]["records"]
     result = {
         "case": {"id": case.id, "title": case.title, "status": "analyzed"},
-        "executive_summary": "This is a screening analysis. The strongest defensible value is likely to sit in verified technical differentiation, controlled know-how and brand assets; traditional-knowledge, classification, evidence and biological-resource questions need documented review.",
+        "executive_summary": (
+            f"The case contains {completeness['supplied_count']} of {completeness['required_count']} decision-critical facts "
+            f"({completeness['score']}%). Patent research status is {patent_status.replace('_', ' ')}. "
+            "Recommendations below are tied to submitted quantities, extract, release and process facts where available; "
+            "missing facts remain explicit rather than being filled with assumptions."
+        ),
         "classification": classification,
         "genome": build_genome(case),
         "risk_cards": risks,
-        "knowledge_graph": build_knowledge_graph(case, evidence_matches),
-        "scientific_evidence": build_evidence(case, evidence_matches),
+        "knowledge_graph": knowledge_graph,
+        "scientific_evidence": scientific_evidence,
         "ip_strategy": ip_strategy,
         "regulatory_abs": build_regulatory(case, classification),
         "jurisdictions": build_jurisdictions(case),
         "challenges": challenges,
         "claim_evidence_graph": claim_graph,
         "design_around": design_around,
+        "case_specific_analysis": specific,
         "evidence_retrieval": {
             **evidence_overview,
             "retrieved_passage_count": len(evidence_matches),
@@ -669,16 +722,16 @@ def analyze_case(
             "Build a claim-to-evidence matrix and quality/safety gap plan.",
         ],
         "confidence": {
-            "score": 0.64 if evidence_matches else 0.58,
-            "label": "Moderate grounded screening confidence",
+            "score": round(min(0.82, 0.35 + completeness["score"] / 250 + (0.08 if evidence_matches else 0)), 2),
+            "label": "Case-specific screening confidence",
             "basis": (
-                "Curated primary sources plus retrieved case-document passages; comprehensive clearance and human appraisal remain required."
+                "Submitted technical facts, curated primary sources and retrieved case-document passages; comprehensive clearance and human appraisal remain required."
                 if evidence_matches
-                else "Curated primary-source registry; no comprehensive database clearance or document appraisal."
+                else "Submitted technical facts and curated primary sources; no uploaded-document appraisal is available."
             ),
         },
         "corpus_version": settings.corpus_version,
-        "generated_by": "IP-SAKTI evidence assurance engine with hybrid retrieval, reranking and claim provenance",
+        "generated_by": "IP-SAKTI evidence assurance engine with feature-level patent comparison, study extraction, hybrid retrieval, reranking and claim provenance",
         "warnings": [
             DISCLAIMER,
             "Legal and regulatory requirements can change; citations show the source date or status available in the registry.",

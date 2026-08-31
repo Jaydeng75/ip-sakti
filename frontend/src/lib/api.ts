@@ -96,6 +96,8 @@ export type AnalysisResult = {
     confidence: { label: string; score: number; basis: string };
     gaps: string[];
     citations: Citation[];
+    study_matrix?: ScientificStudyCollection;
+    traditional_knowledge_records?: TraditionalKnowledgeRecord[];
   };
   ip_strategy: {
     routes: Array<{
@@ -156,12 +158,42 @@ export type AnalysisResult = {
       rationale: string;
       evidence_required: string[];
       residual_risks: string[];
+      basis?: string;
       claim_type: "inference";
       requires_human_review: boolean;
       citations: Citation[];
     }>;
     reviewer_inputs: Record<string, string[]>;
     notice: string;
+  };
+  case_specific_analysis: {
+    input_completeness: {
+      score: number;
+      supplied_count: number;
+      required_count: number;
+      status: string;
+      supplied: Array<CaseFact & { value: string }>;
+      missing: CaseFact[];
+    };
+    technical_features: TechnicalFeature[];
+    novelty_claim_chart: NoveltyChartRow[];
+    patent_landscape: PatentLandscape;
+    traditional_knowledge: {
+      status: string;
+      records: TraditionalKnowledgeRecord[];
+      query: string;
+      search_url: string;
+      authorized_search_required: boolean;
+      limitation: string;
+    };
+    scientific_studies: ScientificStudyCollection;
+    specific_recommendations: Array<{
+      title: string;
+      basis: string;
+      action: string;
+      decision_output: string;
+    }>;
+    data_requests: Array<{ field: string; question: string; blocks: string }>;
   };
   next_actions: string[];
   confidence: { score: number; label: string; basis: string };
@@ -182,6 +214,90 @@ export type AnalysisResult = {
     embedding_revision: string;
     reranker: string;
   };
+};
+
+type CaseFact = { key: string; label: string; request: string; blocks: string };
+
+type TechnicalFeature = {
+  id: string;
+  feature: string;
+  submitted_value: string;
+  status: string;
+  evidence_required: string;
+  decision_areas: string;
+};
+
+type ClaimOverlap = {
+  publication_number?: string | null;
+  family_id?: string | null;
+  claim?: string | null;
+  matched_terms: string[];
+  claim_excerpt: string;
+  url?: string | null;
+  source?: string | null;
+};
+
+type NoveltyChartRow = TechnicalFeature & {
+  reason: string;
+  claim_overlaps: ClaimOverlap[];
+};
+
+type PatentRecord = {
+  publication_number: string;
+  docdb?: string;
+  family_id?: string | null;
+  title: string;
+  claims: Array<{ claim: string; text: string }>;
+  url: string;
+  source: string;
+};
+
+type PatentLandscape = {
+  status: string;
+  provider: string;
+  query: string;
+  records: PatentRecord[];
+  family_count: number;
+  search_url: string;
+  limitation?: string;
+};
+
+type TraditionalKnowledgeRecord = {
+  source_title: string;
+  formulation: string;
+  exact_passage: string;
+  locator?: string | null;
+  content_sha256?: string | null;
+  matched_ingredients: string[];
+  citation: Citation;
+  source_status: string;
+};
+
+type ScientificStudy = {
+  pmid?: string | null;
+  title: string;
+  journal: string;
+  publication_date: string;
+  doi?: string | null;
+  url: string;
+  population: string;
+  dose: string;
+  endpoints: string;
+  limitations: string;
+  abstract_excerpt: string;
+  locator?: string | null;
+  source_status: string;
+};
+
+type ScientificStudyCollection = {
+  status: string;
+  provider?: string;
+  query: string;
+  records: ScientificStudy[];
+  search_url: string;
+  uploaded_record_count?: number;
+  live_record_count?: number;
+  notice?: string;
 };
 
 type EvidenceSection = {

@@ -33,7 +33,15 @@ def sample_case() -> dict:
         "target_markets": ["India", "European Union", "United States"],
         "classical_formulation": False,
         "biological_sourcing": "Cultivated Withania sourced from Rajasthan through an Indian supplier",
-        "metadata_json": {"manufacturing_process": "Standardized extraction and controlled-release coating"},
+        "metadata_json": {
+            "manufacturing_process": "Standardized extraction and controlled-release coating",
+            "quantitative_composition": "Withania root extract 300 mg per capsule",
+            "standardization": "5% total withanolides",
+            "extraction_ratio": "10:1, 70:30 ethanol:water",
+            "dose": "One capsule twice daily for eight weeks",
+            "release_profile": "20-35% at 2 h and at least 85% at 12 h",
+            "process_parameters": "Extraction at 50-55 C for four hours",
+        },
     }
 
 
@@ -47,6 +55,7 @@ def test_authenticated_case_analysis_and_grounded_answer():
         analyzed = client.post(f"/api/v1/cases/{case_id}/analyze", headers=headers)
         assert analyzed.status_code == 200, analyzed.text
         result = analyzed.json()["result"]
+        assert "wellness/nutraceutical" in result["classification"]["label"].lower()
         assert (
             result["scientific_evidence"]["notice"]
             == "Traditional use is not equivalent to clinically established efficacy."
@@ -60,6 +69,12 @@ def test_authenticated_case_analysis_and_grounded_answer():
         }
         assert result["claim_evidence_graph"]["summary"]["claim_count"] >= 5
         assert len(result["design_around"]["alternatives"]) == 4
+        assert result["case_specific_analysis"]["input_completeness"]["score"] >= 70
+        assert any(
+            "300 mg" in row["submitted_value"]
+            for row in result["case_specific_analysis"]["novelty_claim_chart"]
+        )
+        assert all(item.get("basis") for item in result["design_around"]["alternatives"])
         assert result["evidence_retrieval"]["prefetch_limit"] >= 8
         assert result["evidence_retrieval"]["reranker"]
 

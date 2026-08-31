@@ -16,6 +16,10 @@
 - Tamper-evident audit chaining and administrator integrity verification.
 - IndicTrans2 model revisions pinned to reviewed commits, dual-direction caching, optional startup preload and machine-translation provenance.
 - PDF decision records with evidence lineage, corpus/run identity and deterministic record hashes.
+- Live PubMed ESearch/EFetch with structured population, dose, endpoint and limitation extraction.
+- Credentialed EPO OPS patent-family/claim retrieval with feature-level overlap charts and fail-closed credential handling.
+- Exact uploaded TK passage extraction with page/chunk and SHA-256 lineage; no false absence conclusion when TKDL is inaccessible.
+- Quantitative case-input completeness gates and fact-linked, falsifiable design-around directions.
 
 ## Required deployment controls
 
@@ -35,6 +39,7 @@ The complete GitHub Actions definition is stored at `docs/github-actions-ci.temp
 ## Data and professional approval gates
 
 - Obtain licences or API authorization for patent databases and scientific full text.
+- Register EPO OPS credentials and set an NCBI contact email; production startup rejects a deployment without these live-research controls.
 - Use TKDL only through authorized access. The application deliberately makes no unrestricted-access claim.
 - Snapshot, version and legally review every official-source corpus update.
 - Validate retrieval recall, citation correctness, abstention, terminology and translations against a bilingual expert test set.

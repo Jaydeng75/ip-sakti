@@ -29,6 +29,7 @@ export default function DesignAroundPage() {
                   <span className="rounded-full bg-accent-subtle px-3 py-1 font-mono text-[9px] uppercase text-accent">inference · review required</span>
                 </div>
                 <h2 className="mt-5 text-2xl font-semibold">{alternative.dimension}</h2>
+                {alternative.basis && <div className="mt-4 rounded-xl border border-accent/20 bg-accent-subtle p-3"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-accent">Case-specific basis</p><p className="mt-1 text-xs leading-5 text-ink">{alternative.basis}</p></div>}
                 <p className="mt-4 text-sm leading-6 text-ink">{alternative.proposed_change}</p>
                 <p className="mt-3 text-sm leading-6 text-ink-muted">{alternative.rationale}</p>
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">

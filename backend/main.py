@@ -109,6 +109,12 @@ def validate_runtime() -> None:
             raise RuntimeError("Pin an approved reranker revision before production.")
         if not settings.otel_enabled or not settings.otel_exporter_endpoint:
             raise RuntimeError("Production requires OpenTelemetry and an approved OTLP exporter endpoint.")
+        if not settings.external_research_enabled:
+            raise RuntimeError("IPSAKTI_EXTERNAL_RESEARCH_ENABLED must be true in production.")
+        if not settings.ncbi_contact_email:
+            raise RuntimeError("IPSAKTI_NCBI_CONTACT_EMAIL is required for production PubMed research.")
+        if not settings.epo_ops_consumer_key or not settings.epo_ops_consumer_secret:
+            raise RuntimeError("EPO OPS consumer credentials are required for production patent-family research.")
 
 
 def bootstrap_admin() -> None:
@@ -140,7 +146,17 @@ def seed_demo_cases(db: Session, user: models.User) -> None:
             "target_markets": ["India", "European Union", "United States"],
             "classical_formulation": False,
             "biological_sourcing": "Cultivated Withania sourced from Rajasthan through a documented Indian supplier",
-            "metadata_json": {"manufacturing_process": "Standardized extraction and controlled-release coating", "brand": "SattvaRelease"},
+            "metadata_json": {
+                "manufacturing_process": "Hydroethanolic extraction, vacuum concentration and controlled-release coating",
+                "quantitative_composition": "Withania somnifera root extract 300 mg per capsule",
+                "standardization": "5% total withanolides",
+                "extraction_ratio": "10:1; 70:30 ethanol:water",
+                "dose": "One capsule twice daily for eight weeks",
+                "release_profile": "20–35% marker release at 2 h and at least 85% at 12 h",
+                "process_parameters": "Extraction at 50–55°C for 4 h; coating weight gain 3.0–3.5%",
+                "proposed_claim": "Supports stress resilience in adults after eight weeks without a disease-treatment claim",
+                "brand": "SattvaRelease",
+            },
         },
         {
             "title": "Neem Wound-care Hydrogel",
@@ -536,6 +552,7 @@ def run_analysis(case_id: int, db: Db, user: CurrentUser):
             case.intended_use,
             case.biological_sourcing,
             " ".join(case.ingredients or []),
+            " ".join(str(value) for value in (case.metadata_json or {}).values() if value),
         ]
         if value
     )

@@ -38,6 +38,7 @@ def run_reindex_job(job_id: int) -> None:
                         case.intended_use,
                         case.biological_sourcing,
                         " ".join(case.ingredients or []),
+                        " ".join(str(value) for value in (case.metadata_json or {}).values() if value),
                     ]
                     if value
                 )

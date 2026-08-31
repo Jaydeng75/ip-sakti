@@ -16,6 +16,9 @@ Source-grounded innovation intelligence for Ayurvedic and biological-resource pr
 - Case-document retrieval uses a configurable multilingual embedding provider, PostgreSQL full-text/pgvector candidate prefetch and a configurable reranker. Development retains an explicitly labelled deterministic outage fallback.
 - Every indexed chunk records embedding provider, model and revision; every retrieved citation records lexical, semantic and reranker scores plus page/chunk and content-hash lineage.
 - Analysis now includes a claim-to-evidence provenance graph and an Innovation Design-Around workspace that converts reviewer objections into testable technical alternatives.
+- Case-specific analysis preserves quantities, extract ratios, standardization, dose, release profiles and critical process parameters instead of replacing missing facts with generic advice.
+- Live PubMed retrieval extracts population, dose, endpoints and stated limitations; credentialed EPO OPS retrieval adds patent-family records and claim text for feature-level overlap screening.
+- Exact traditional-knowledge passages from authorized/user-supplied documents retain page/chunk locators and SHA-256 lineage. Restricted TKDL content is never represented as publicly searched.
 - Versioned reindex jobs and authoritative-source snapshots support model migrations and legal-change review.
 - Human expert-review requests and branded PDF decision records with evidence registers, run/corpus identifiers and report hashes.
 - Tamper-evident SHA-256 audit chaining, case-level audit history and administrator integrity verification.
@@ -118,7 +121,20 @@ pytest -q
 
 ## Source and decision-safety model
 
-`backend/data/sources.json` is a versioned curated registry of primary law, official regulation/guidance and treaty sources. The engine does not claim that this small registry is a comprehensive patent, TKDL, scientific-literature or regulatory corpus. If retrieval does not find relevant support, Ask IP-SAKTI abstains. All screening conclusions require human review.
+`backend/data/sources.json` is a versioned curated registry of primary law, official regulation/guidance, treaties and official live-data services. It is supplemented at analysis time by PubMed and, when EPO credentials are configured, EPO OPS patent-family and claim records. The engine does not claim comprehensive patent, TKDL, full-text scientific or regulatory clearance. If retrieval does not find relevant support, Ask IP-SAKTI abstains. All screening conclusions require human review.
+
+## Live patent and scientific research
+
+Docker Compose enables external research. PubMed uses NCBI ESearch/EFetch and returns the exact query and source links. Set `IPSAKTI_NCBI_CONTACT_EMAIL`; an optional `IPSAKTI_NCBI_API_KEY` raises the permitted request rate.
+
+Register an application for EPO Open Patent Services and set:
+
+```dotenv
+IPSAKTI_EPO_OPS_CONSUMER_KEY=...
+IPSAKTI_EPO_OPS_CONSUMER_SECRET=...
+```
+
+Without EPO credentials, the patent workspace shows `credential required`, preserves the exact Espacenet query and makes no claim-level or patent-family assertion. Production startup rejects missing EPO credentials. TKDL remains an authorized-access dependency: upload legally obtained extracts to get exact passage/page citations, or complete the search with an authorized patent professional.
 
 ## Evidence assurance and retrieval
 

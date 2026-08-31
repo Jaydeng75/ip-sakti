@@ -14,7 +14,15 @@ const EXAMPLE = {
   intendedUse: "Daily stress management and mental resilience support",
   targetMarkets: "India, European Union, United States",
   sourcing: "Cultivated Indian botanical resources sourced through documented domestic suppliers",
-  manufacturing: "Standardized extraction, fixed-ratio blending and film coating",
+  manufacturing: "Separate hydroethanolic extraction, vacuum concentration below 55°C, fixed-ratio blending and aqueous film coating",
+  quantitativeComposition: "Per tablet: Withania somnifera root extract 300 mg; Bacopa monnieri whole-plant extract 150 mg; Ocimum tenuiflorum leaf extract 100 mg",
+  standardization: "Withania: 5% total withanolides; Bacopa: 20% bacosides; Tulsi: 2% ursolic acid",
+  extractionRatio: "Withania 10:1, Bacopa 8:1, Tulsi 5:1; 70:30 ethanol:water extracts",
+  dose: "One tablet twice daily after food for 8 weeks; total daily extract exposure 1,100 mg",
+  releaseProfile: "Target: 20–35% marker release at 2 h, 55–75% at 6 h and at least 85% at 12 h in the proposed dissolution method",
+  processParameters: "Extraction 50–55°C for 4 h; concentrate under vacuum; blend 18 min at 12 rpm; film-coat weight gain 3.0–3.5%",
+  proposedClaim: "Supports stress resilience in adults with perceived stress, measured after 8 weeks, without a disease-treatment claim",
+  classicalReference: "",
   brand: "",
   classical: false,
 };
@@ -28,6 +36,14 @@ export default function AnalyzeInnovationPage() {
     targetMarkets: "India",
     sourcing: "",
     manufacturing: "",
+    quantitativeComposition: "",
+    standardization: "",
+    extractionRatio: "",
+    dose: "",
+    releaseProfile: "",
+    processParameters: "",
+    proposedClaim: "",
+    classicalReference: "",
     brand: "",
     classical: false,
   });
@@ -56,7 +72,7 @@ export default function AnalyzeInnovationPage() {
     try {
       const title = form.description.trim().split(/[.!?\n]/)[0].slice(0, 110) || "Untitled innovation";
       const ingredients = form.ingredients
-        .split(/[\n,]/)
+        .split(/\n/)
         .map((item) => item.trim())
         .filter(Boolean);
       const markets = form.targetMarkets
@@ -74,6 +90,14 @@ export default function AnalyzeInnovationPage() {
         biological_sourcing: form.sourcing || null,
         metadata_json: {
           manufacturing_process: form.manufacturing,
+          quantitative_composition: form.quantitativeComposition,
+          standardization: form.standardization,
+          extraction_ratio: form.extractionRatio,
+          dose: form.dose,
+          release_profile: form.releaseProfile,
+          process_parameters: form.processParameters,
+          proposed_claim: form.proposedClaim,
+          classical_reference: form.classicalReference,
           brand: form.brand,
         },
       });
@@ -136,6 +160,18 @@ export default function AnalyzeInnovationPage() {
 
         {showDetails && (
           <div className="mt-5 grid gap-4 border-t border-border pt-5 md:grid-cols-2">
+            <div className="md:col-span-2 rounded-2xl border border-accent/20 bg-accent-subtle p-4">
+              <p className="text-sm font-semibold text-accent">Specificity inputs</p>
+              <p className="mt-1 text-xs leading-5 text-ink-muted">These values drive feature-level patent comparison, exposure-matched science, regulatory classification and evidence-backed design-around options.</p>
+            </div>
+            <TextField label="Quantitative composition" value={form.quantitativeComposition} onChange={(value) => update("quantitativeComposition", value)} placeholder="Amount of every active per tablet, capsule, mL or daily dose" multiline />
+            <TextField label="Standardization / fingerprint" value={form.standardization} onChange={(value) => update("standardization", value)} placeholder="Marker compounds and acceptance ranges" multiline />
+            <TextField label="Extraction ratio and solvent" value={form.extractionRatio} onChange={(value) => update("extractionRatio", value)} placeholder="DER or ratio, solvent system and extract type" />
+            <TextField label="Dose, frequency and duration" value={form.dose} onChange={(value) => update("dose", value)} placeholder="Example: 300 mg twice daily for 8 weeks" />
+            <TextField label="Release / performance profile" value={form.releaseProfile} onChange={(value) => update("releaseProfile", value)} placeholder="Method, timepoints and target acceptance ranges" multiline />
+            <TextField label="Critical process parameters" value={form.processParameters} onChange={(value) => update("processParameters", value)} placeholder="Temperature, time, pH, pressure and defined ranges" multiline />
+            <TextField label="Exact proposed claim" value={form.proposedClaim} onChange={(value) => update("proposedClaim", value)} placeholder="Population, outcome, duration and exact claim wording" multiline />
+            <TextField label="Exact classical reference" value={form.classicalReference} onChange={(value) => update("classicalReference", value)} placeholder="Text, chapter, formulation, verse and page" multiline />
             <TextField label="Biological-resource sourcing" value={form.sourcing} onChange={(value) => update("sourcing", value)} placeholder="Species, source location, supplier and access date" />
             <TextField label="Manufacturing / technical process" value={form.manufacturing} onChange={(value) => update("manufacturing", value)} placeholder="Extraction, standardization, delivery or process steps" />
             <TextField label="Brand / product name" value={form.brand} onChange={(value) => update("brand", value)} placeholder="Optional" />
@@ -185,6 +221,7 @@ function AnalysisLoading() {
 
 function AnalysisWorkspace({ analysis }: { analysis: AnalysisResponse }) {
   const result = analysis.result;
+  const specific = result.case_specific_analysis;
   return (
     <section className="mt-8 space-y-6">
       <div className="rounded-3xl border border-accent/25 bg-accent-subtle p-6 md:p-8">
@@ -208,6 +245,20 @@ function AnalysisWorkspace({ analysis }: { analysis: AnalysisResponse }) {
           {result.risk_cards.map((card) => (
             <div key={card.key} className="rounded-2xl border border-border bg-surface p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-semibold">{card.title}</p><p className="mt-2 text-xs leading-5 text-ink-muted">{card.summary}</p></div><div className="text-right"><p className="text-2xl font-semibold text-accent">{card.score}</p><p className="font-mono text-[9px] uppercase text-ink-muted">{card.level}</p></div></div></div>
           ))}
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr]">
+        <div className="rounded-3xl border border-border bg-[#16212B] p-6 text-white md:p-8">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/50">Decision-input completeness</p>
+          <p className="mt-4 text-5xl font-semibold text-[#9BD0C0]">{specific.input_completeness.score}%</p>
+          <p className="mt-3 text-sm text-white/70">{specific.input_completeness.supplied_count} of {specific.input_completeness.required_count} critical facts supplied.</p>
+          <div className="mt-6 space-y-2">{specific.input_completeness.missing.slice(0, 4).map((item) => <div key={item.key} className="rounded-xl border border-white/10 bg-white/5 p-3"><p className="text-xs font-semibold">Missing: {item.label}</p><p className="mt-1 text-[11px] leading-5 text-white/55">{item.request}</p></div>)}</div>
+        </div>
+        <div className="rounded-3xl border border-border bg-surface p-6 md:p-8">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Case-specific recommendations</p>
+          <h3 className="mt-2 text-2xl font-semibold">Advice tied to submitted facts</h3>
+          <div className="mt-5 space-y-3">{specific.specific_recommendations.slice(0, 5).map((item, index) => <article key={`${item.title}-${index}`} className="rounded-2xl border border-border bg-background p-4"><div className="flex gap-3"><span className="font-mono text-[10px] text-accent">{String(index + 1).padStart(2, "0")}</span><div><p className="text-sm font-semibold">{item.title}</p><p className="mt-1 text-xs leading-5 text-accent">Basis: {item.basis}</p><p className="mt-2 text-xs leading-5 text-ink-muted">{item.action}</p><p className="mt-2 text-[11px] font-medium text-ink">Output: {item.decision_output}</p></div></div></article>)}</div>
         </div>
       </div>
 
