@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     max_chunk_characters: int = Field(default=700, ge=100, le=2_000)
     max_source_tokens: int = Field(default=256, ge=64, le=1_024)
     max_output_tokens: int = Field(default=256, ge=64, le=1_024)
+    generation_beams: int = Field(default=1, ge=1, le=5)
 
     model_config = SettingsConfigDict(env_prefix="INDICTRANS_", extra="ignore")
 
@@ -192,8 +193,11 @@ class ModelManager:
             generated = model.generate(
                 **batch,
                 max_length=settings.max_output_tokens,
-                num_beams=5,
+                num_beams=settings.generation_beams,
                 do_sample=False,
+                # The pinned Transformers release preserves the legacy cache format
+                # expected by IndicTrans2's current remote decoder implementation.
+                use_cache=True,
             )
         decoded = tokenizer.batch_decode(generated, skip_special_tokens=True, clean_up_tokenization_spaces=True)
         return processor.postprocess_batch(decoded, lang=target_language), model_id

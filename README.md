@@ -81,7 +81,7 @@ export INDICTRANS_HF_TOKEN=hf_your_read_token
 uvicorn app:app --host 0.0.0.0 --port 8100
 ```
 
-Then set `IPSAKTI_TRANSLATION_ENABLED=true` in `backend/.env`. IndicTrans2 checkpoints are substantial; CPU inference is suitable for evaluation, while a dedicated accelerator-backed service is recommended for production traffic. For a controlled deployment, replace both `main` revision values with reviewed Hugging Face commit hashes.
+Then set `IPSAKTI_TRANSLATION_ENABLED=true` in `backend/.env`. IndicTrans2 checkpoints are substantial; CPU inference is suitable for evaluation and defaults to greedy decoding (`INDICTRANS_GENERATION_BEAMS=1`). An accelerator-backed service can raise beam search up to 5 for quality-sensitive production traffic. For a controlled deployment, replace both `main` revision values with reviewed Hugging Face commit hashes.
 
 ## Verification
 
