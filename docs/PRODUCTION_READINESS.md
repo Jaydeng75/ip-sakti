@@ -7,6 +7,10 @@
 - Exact CORS origins, trusted hosts, request limits, browser/API security headers and generic server errors.
 - PDF/TXT/DOCX validation, compressed-file expansion protection, optional fail-closed ClamAV scanning and SHA-256 integrity records.
 - Text extraction, page-aware chunking, hybrid lexical/vector retrieval and protected case-document citations.
+- PostgreSQL full-text and pgvector candidate prefetch, configurable multilingual embeddings and reranking.
+- Embedding/reranker model and revision lineage on indexed chunks and analysis runs.
+- Claim-to-evidence provenance, versioned reindex jobs and curated-source change snapshots.
+- Optional OpenTelemetry FastAPI instrumentation and request correlation headers.
 - Safe abstention, explicit claim/support types, confidence, limitations and mandatory human-review flags.
 - Alembic schema versioning, PostgreSQL support, non-root containers and health checks.
 - Tamper-evident audit chaining and administrator integrity verification.
@@ -34,6 +38,10 @@ The complete GitHub Actions definition is stored at `docs/github-actions-ci.temp
 - Use TKDL only through authorized access. The application deliberately makes no unrestricted-access claim.
 - Snapshot, version and legally review every official-source corpus update.
 - Validate retrieval recall, citation correctness, abstention, terminology and translations against a bilingual expert test set.
+- Replace the bundled engineering smoke set with at least 200–500 expert-labelled patent, TK, ABS, regulatory and scientific questions. Establish release gates for Recall@20, nDCG@10, citation correctness, groundedness, abstention F1 and language parity.
+- Deploy approved embedding and reranker services on private infrastructure, pin immutable model revisions and set `IPSAKTI_EMBEDDING_ALLOW_FALLBACK=false`.
+- Move the included database-backed reindex job executor to a durable worker queue before horizontal scaling; retain `reindex_jobs` as the user-visible state and audit record.
+- Schedule the source monitor through the deployment scheduler, review every `changed` snapshot and update the curated registry/corpus version only after qualified approval.
 - Obtain patent, regulatory, ABS, privacy/security and scientific approval before relying on results for filings or market entry.
 
 Until these external gates are signed off, deploy the platform as decision-support software with the included disclaimer—not as an automated legal opinion.

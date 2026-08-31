@@ -10,20 +10,49 @@ export default function ScientificEvidencePage() {
   const { analysis, loading, error } = useCurrentAnalysis();
   const currentCase = useCurrentCase();
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<Array<{ id: number; filename: string; sha256: string; status: string; page_count: number; chunk_count: number; size_bytes: number }>>([]);
+  const [documents, setDocuments] = useState<Array<{ id: number; filename: string; sha256: string; status: string; page_count: number; chunk_count: number; size_bytes: number; embedding_provider?: string | null; embedding_model?: string | null; embedding_revision?: string | null }>>([]);
+  const [jobs, setJobs] = useState<Array<{ id: number; status: string; embedding_model: string; embedding_revision: string }>>([]);
+  const [sourceSnapshots, setSourceSnapshots] = useState<Array<{ id: number; source_id: string; status: string; checked_at: string }>>([]);
   const [processing, setProcessing] = useState(false);
   const evidence = analysis?.result.scientific_evidence;
   const retrieval = analysis?.result.evidence_retrieval;
+  const claimGraph = analysis?.result.claim_evidence_graph;
 
   const refreshDocuments = useCallback(async () => {
     if (!currentCase.backendId) return;
     try { setDocuments(await caseApi.documents(currentCase.backendId)); } catch { setDocuments([]); }
   }, [currentCase.backendId]);
 
+  const refreshJobs = useCallback(async () => {
+    if (!currentCase.backendId) return;
+    try { setJobs(await caseApi.reindexJobs(currentCase.backendId)); } catch { setJobs([]); }
+  }, [currentCase.backendId]);
+
+  const refreshSourceSnapshots = useCallback(async () => {
+    try { setSourceSnapshots((await caseApi.sourceChanges()).snapshots); } catch { setSourceSnapshots([]); }
+  }, []);
+
   useEffect(() => {
-    const initialLoad = window.setTimeout(() => void refreshDocuments(), 0);
+    const initialLoad = window.setTimeout(() => {
+      void Promise.all([refreshDocuments(), refreshJobs(), refreshSourceSnapshots()]);
+    }, 0);
     return () => window.clearTimeout(initialLoad);
-  }, [refreshDocuments]);
+  }, [refreshDocuments, refreshJobs, refreshSourceSnapshots]);
+
+  async function reindex() {
+    if (!currentCase.backendId) return;
+    setProcessing(true);
+    setUploadStatus("Queueing a versioned evidence reindex…");
+    try {
+      const job = await caseApi.reindex(currentCase.backendId);
+      setUploadStatus(`Reindex job ${job.id} queued · ${job.embedding_model} · ${job.embedding_revision}`);
+      await refreshJobs();
+    } catch (caught) {
+      setUploadStatus(caught instanceof Error ? caught.message : "Reindex failed.");
+    } finally {
+      setProcessing(false);
+    }
+  }
 
   async function upload(file: File) {
     if (!currentCase.backendId) return;
@@ -57,7 +86,9 @@ export default function ScientificEvidencePage() {
             <div className="rounded-3xl border border-border bg-surface p-6"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Evidence gaps</p><h2 className="mt-2 text-2xl font-semibold">What is still missing?</h2><div className="mt-5 space-y-3">{evidence.gaps.map((gap, index) => <div key={gap} className="flex gap-3 rounded-xl border border-border bg-background p-4"><span className="font-mono text-[10px] text-accent">{String(index + 1).padStart(2, "0")}</span><p className="text-sm">{gap}</p></div>)}</div></div>
             <div className="rounded-3xl border border-border bg-surface p-6"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Evidence references</p><h2 className="mt-2 text-2xl font-semibold">Sources supporting this screening</h2><div className="mt-5 space-y-3">{evidence.citations.map((source) => <button type="button" onClick={() => void openCitation(source)} key={source.id} className="block w-full rounded-xl border border-border bg-background p-4 text-left transition hover:border-accent"><div className="flex justify-between gap-4"><p className="text-sm font-semibold">{source.title}</p><span className="font-mono text-[9px] text-ink-muted">{source.locator ?? source.jurisdiction}</span></div><p className="mt-2 text-xs text-ink-muted">{source.authority} · {source.support_status}</p><p className="mt-3 text-xs leading-5 text-ink-muted">{source.excerpt}</p></button>)}</div></div>
           </section>
-          <section className="mt-8 rounded-3xl border border-border bg-surface p-6"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Case evidence vault</p><h2 className="mt-2 text-xl font-semibold">Attach and index controlled evidence</h2><p className="mt-2 text-xs text-ink-muted">PDF, TXT or DOCX · maximum 10 MB · automatic scanned-PDF OCR · SHA-256 integrity · page/chunk lineage</p></div><label className={`rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white ${processing ? "cursor-wait opacity-50" : "cursor-pointer"}`}><input disabled={processing} type="file" accept=".pdf,.txt,.docx" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.currentTarget.value = ""; }} />{processing ? "Indexing…" : "Attach evidence"}</label></div>{uploadStatus && <p role="status" className="mt-4 rounded-xl border border-border bg-background p-3 text-xs text-ink-muted">{uploadStatus}</p>}<div className="mt-5 grid gap-3 md:grid-cols-3"><VaultMetric label="Indexed documents" value={retrieval?.indexed_document_count ?? documents.filter((item) => item.status === "indexed").length} /><VaultMetric label="Searchable passages" value={retrieval?.chunk_count ?? documents.reduce((sum, item) => sum + item.chunk_count, 0)} /><VaultMetric label="Retrieved this run" value={retrieval?.retrieved_passage_count ?? 0} /></div>{documents.length > 0 && <div className="mt-5 space-y-2">{documents.map((document) => <div key={document.id} className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">{document.filename}</p><p className="mt-1 font-mono text-[9px] uppercase text-ink-muted">{document.status} · {document.page_count} page(s) · {document.chunk_count} passages · SHA {document.sha256.slice(0, 12)}…</p></div><button type="button" onClick={() => { if (!currentCase.backendId) return; void caseApi.deleteDocument(currentCase.backendId, document.id).then(async () => { await caseApi.analyze(currentCase.backendId!); notifyAnalysisUpdated(); await refreshDocuments(); }); }} className="text-xs font-semibold text-danger hover:underline">Remove</button></div>)}</div>}</section>
+          {claimGraph && <section className="mt-8 rounded-3xl border border-border bg-surface p-6"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Claim-to-evidence graph</p><h2 className="mt-2 text-2xl font-semibold">Trace every screening claim.</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-ink-muted">{claimGraph.notice}</p></div><div className="rounded-2xl bg-[#16212B] px-6 py-4 text-white"><p className="text-3xl font-semibold">{Math.round(claimGraph.summary.coverage * 100)}%</p><p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-white/50">traceability coverage</p></div></div><div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{claimGraph.claims.slice(0, 9).map((claim) => { const links = claimGraph.edges.filter((edge) => edge.target === claim.id).length; return <article key={claim.id} className="rounded-2xl border border-border bg-background p-4"><div className="flex items-center justify-between gap-3"><span className="font-mono text-[9px] uppercase text-accent">{claim.claim_type}</span><span className="font-mono text-[9px] uppercase text-ink-muted">{links} source link{links === 1 ? "" : "s"}</span></div><p className="mt-3 line-clamp-3 text-xs leading-5 text-ink">{claim.text}</p><p className="mt-3 text-[10px] font-semibold uppercase text-ink-muted">{claim.status}</p></article>; })}</div></section>}
+          <section className="mt-8 rounded-3xl border border-border bg-[#16212B] p-6 text-white"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#9BD0C0]">Authoritative-source change monitor</p><h2 className="mt-2 text-2xl font-semibold">Know when the legal baseline moves.</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">Scheduled snapshots use content hashes and HTTP validators. Every detected change is held for qualified human review before the corpus version changes.</p></div><div className="grid grid-cols-2 gap-3"><DarkMetric label="Snapshots" value={sourceSnapshots.length} /><DarkMetric label="Change flags" value={sourceSnapshots.filter((item) => item.status === "changed").length} /></div></div>{sourceSnapshots.length === 0 && <p className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-white/55">No source snapshots yet. An administrator or deployment scheduler must run the controlled monitor.</p>}</section>
+          <section className="mt-8 rounded-3xl border border-border bg-surface p-6"><div className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Case evidence vault</p><h2 className="mt-2 text-xl font-semibold">Attach, embed and rerank controlled evidence</h2><p className="mt-2 text-xs text-ink-muted">PDF, TXT or DOCX · maximum 10 MB · OCR · SHA-256 integrity · page/chunk lineage · versioned embeddings</p></div><div className="flex flex-wrap gap-3"><button type="button" disabled={processing || (retrieval?.indexed_document_count ?? documents.length) === 0} onClick={() => void reindex()} className="rounded-xl border border-accent px-5 py-3 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-40">Reindex evidence</button><label className={`rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white ${processing ? "cursor-wait opacity-50" : "cursor-pointer"}`}><input disabled={processing} type="file" accept=".pdf,.txt,.docx" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.currentTarget.value = ""; }} />{processing ? "Processing…" : "Attach evidence"}</label></div></div>{uploadStatus && <p role="status" className="mt-4 rounded-xl border border-border bg-background p-3 text-xs text-ink-muted">{uploadStatus}</p>}<div className="mt-5 grid gap-3 md:grid-cols-4"><VaultMetric label="Indexed documents" value={retrieval?.indexed_document_count ?? documents.filter((item) => item.status === "indexed").length} /><VaultMetric label="Searchable passages" value={retrieval?.chunk_count ?? documents.reduce((sum, item) => sum + item.chunk_count, 0)} /><VaultMetric label="Prefetch candidates" value={retrieval?.prefetch_limit ?? 0} /><VaultMetric label="Retrieved this run" value={retrieval?.retrieved_passage_count ?? 0} /></div>{retrieval && <div className="mt-5 grid gap-3 rounded-2xl border border-border bg-background p-4 md:grid-cols-3"><PipelineFact label="Embedding" value={`${retrieval.embedding_model} · ${retrieval.embedding_revision}`} /><PipelineFact label="Reranker" value={retrieval.reranker} /><PipelineFact label="Pipeline" value={retrieval.method} /></div>}{jobs.length > 0 && <p className="mt-4 text-xs text-ink-muted">Latest reindex job: <span className="font-semibold text-ink">#{jobs[0].id} · {jobs[0].status}</span></p>}{documents.length > 0 && <div className="mt-5 space-y-2">{documents.map((document) => <div key={document.id} className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">{document.filename}</p><p className="mt-1 font-mono text-[9px] uppercase text-ink-muted">{document.status} · {document.page_count} page(s) · {document.chunk_count} passages · SHA {document.sha256.slice(0, 12)}…</p><p className="mt-1 text-[10px] text-ink-muted">{document.embedding_model ?? "embedding pending"} · {document.embedding_revision ?? "unversioned"}</p></div><button type="button" onClick={() => { if (!currentCase.backendId) return; void caseApi.deleteDocument(currentCase.backendId, document.id).then(async () => { await caseApi.analyze(currentCase.backendId!); notifyAnalysisUpdated(); await refreshDocuments(); }); }} className="text-xs font-semibold text-danger hover:underline">Remove</button></div>)}</div>}</section>
         </>
       )}
     </div>
@@ -70,4 +101,12 @@ function EvidenceCard({ number, title, status, summary, confidence }: { number: 
 
 function VaultMetric({ label, value }: { label: string; value: number }) {
   return <div className="rounded-xl border border-border bg-background p-4"><p className="text-2xl font-semibold text-accent">{value}</p><p className="mt-1 text-xs text-ink-muted">{label}</p></div>;
+}
+
+function PipelineFact({ label, value }: { label: string; value: string }) {
+  return <div><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-accent">{label}</p><p className="mt-2 text-xs leading-5 text-ink-muted">{value}</p></div>;
+}
+
+function DarkMetric({ label, value }: { label: string; value: number }) {
+  return <div className="min-w-28 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"><p className="text-2xl font-semibold text-[#9BD0C0]">{value}</p><p className="mt-1 text-[9px] uppercase tracking-[0.15em] text-white/45">{label}</p></div>;
 }

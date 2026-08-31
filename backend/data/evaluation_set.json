@@ -1,0 +1,22 @@
+{
+  "name": "IP-SAKTI starter retrieval evaluation",
+  "status": "engineering-smoke-set-not-expert-validation",
+  "documents": [
+    {"id": "patents-act", "text": "The Patents Act 1970 contains exclusions relevant to traditional knowledge, known properties and admixtures under Section 3."},
+    {"id": "nagoya", "text": "The Nagoya Protocol addresses fair and equitable benefit sharing arising from the utilization of genetic resources."},
+    {"id": "fssai", "text": "The Food Safety and Standards Ayurveda Aahara Regulations address qualifying food products, composition, claims and labelling in India."},
+    {"id": "eu-herbal", "text": "Directive 2004/24/EC provides a traditional herbal medicinal product registration route in the European Union."},
+    {"id": "fda-botanical", "text": "FDA botanical drug development guidance discusses quality controls, nonclinical evidence and clinical development for botanical drugs."},
+    {"id": "batch-note", "text": "DEMO-EVIDENCE-47 records chromatographic batch identity and a twelve-week stability observation but does not establish clinical efficacy."}
+  ],
+  "queries": [
+    {"question": "Which source discusses Section 3 and traditional knowledge exclusions?", "relevant": ["patents-act"]},
+    {"question": "What governs benefit sharing for genetic resources?", "relevant": ["nagoya"]},
+    {"question": "Which Indian regulation covers Ayurveda Aahara labelling?", "relevant": ["fssai"]},
+    {"question": "What is the EU traditional herbal registration route?", "relevant": ["eu-herbal"]},
+    {"question": "Which guidance covers clinical development of botanical drugs?", "relevant": ["fda-botanical"]},
+    {"question": "What does DEMO-EVIDENCE-47 say about batch identity?", "relevant": ["batch-note"]},
+    {"question": "Nagoya Protocol genetic resources benefit sharing", "relevant": ["nagoya"]},
+    {"question": "zxqv orbital metallurgy", "relevant": []}
+  ]
+}

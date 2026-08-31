@@ -34,6 +34,12 @@ export type Citation = {
   source_type?: "official" | "case_document";
   content_sha256?: string | null;
   retrieval_score?: number | null;
+  lexical_score?: number | null;
+  semantic_score?: number | null;
+  rerank_score?: number | null;
+  prefetch_rank?: number | null;
+  embedding_model?: string | null;
+  reranker?: string | null;
 };
 
 export type RiskCard = {
@@ -134,6 +140,29 @@ export type AnalysisResult = {
       citations?: Citation[];
     }>
   >;
+  claim_evidence_graph: {
+    claims: Array<{ id: string; text: string; claim_type: string; status: string; confidence: number }>;
+    evidence: Array<{ id: string; citation_id: string; title: string; source_type: string; support_status: string; jurisdiction: string; effective_date: string; locator?: string | null }>;
+    edges: Array<{ id: string; source: string; target: string; relation: string }>;
+    summary: { claim_count: number; evidence_count: number; supported_or_qualified: number; unsupported: number; coverage: number };
+    notice: string;
+  };
+  design_around: {
+    recommended_route: string[];
+    alternatives: Array<{
+      id: string;
+      dimension: string;
+      proposed_change: string;
+      rationale: string;
+      evidence_required: string[];
+      residual_risks: string[];
+      claim_type: "inference";
+      requires_human_review: boolean;
+      citations: Citation[];
+    }>;
+    reviewer_inputs: Record<string, string[]>;
+    notice: string;
+  };
   next_actions: string[];
   confidence: { score: number; label: string; basis: string };
   corpus_version: string;
@@ -147,6 +176,11 @@ export type AnalysisResult = {
     citations: Citation[];
     method: string;
     appraisal_status: string;
+    prefetch_limit: number;
+    embedding_provider: string;
+    embedding_model: string;
+    embedding_revision: string;
+    reranker: string;
   };
 };
 
@@ -334,9 +368,17 @@ export const caseApi = {
     );
   },
   documents: (caseId: number) =>
-    apiRequest<Array<{ id: number; filename: string; sha256: string; status: string; page_count: number; chunk_count: number; size_bytes: number }>>(`/cases/${caseId}/documents`),
+    apiRequest<Array<{ id: number; filename: string; sha256: string; status: string; page_count: number; chunk_count: number; size_bytes: number; embedding_provider?: string | null; embedding_model?: string | null; embedding_revision?: string | null }>>(`/cases/${caseId}/documents`),
   deleteDocument: (caseId: number, documentId: number) =>
     apiRequest<void>(`/cases/${caseId}/documents/${documentId}`, { method: "DELETE" }),
+  reindex: (caseId: number) =>
+    apiRequest<{ id: number; status: string; embedding_model: string; embedding_revision: string }>(`/cases/${caseId}/reindex`, { method: "POST" }),
+  reindexJobs: (caseId: number) =>
+    apiRequest<Array<{ id: number; status: string; embedding_model: string; embedding_revision: string; result: Record<string, unknown>; error?: string | null; created_at: string; completed_at?: string | null }>>(`/cases/${caseId}/reindex-jobs`),
+  designAround: (caseId: number) =>
+    apiRequest<AnalysisResult["design_around"]>(`/cases/${caseId}/design-around`),
+  sourceChanges: () =>
+    apiRequest<{ snapshots: Array<{ id: number; source_id: string; url: string; status: string; content_sha256?: string | null; http_status?: number | null; change_summary: Record<string, unknown>; checked_at: string }> }>("/sources/changes"),
   requestExpertReview: (caseId: number, reviewType: string, notes?: string) =>
     apiRequest<{ id: number; status: string }>(`/cases/${caseId}/expert-review`, {
       method: "POST",

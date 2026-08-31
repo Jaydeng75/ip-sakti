@@ -58,6 +58,10 @@ def test_authenticated_case_analysis_and_grounded_answer():
             "abs_reviewer",
             "scientific_evidence_reviewer",
         }
+        assert result["claim_evidence_graph"]["summary"]["claim_count"] >= 5
+        assert len(result["design_around"]["alternatives"]) == 4
+        assert result["evidence_retrieval"]["prefetch_limit"] >= 8
+        assert result["evidence_retrieval"]["reranker"]
 
         answer = client.post(
             f"/api/v1/cases/{case_id}/ask",
@@ -143,6 +147,7 @@ def test_uploaded_evidence_is_indexed_retrieved_cited_and_exported():
         document = uploaded.json()
         assert document["status"] == "indexed"
         assert document["chunk_count"] >= 1
+        assert document["embedding_model"]
 
         analyzed = client.post(f"/api/v1/cases/{case_id}/analyze", headers=headers)
         assert analyzed.status_code == 200, analyzed.text
@@ -173,3 +178,9 @@ def test_uploaded_evidence_is_indexed_retrieved_cited_and_exported():
         assert pdf.headers["content-type"].startswith("application/pdf")
         assert pdf.content.startswith(b"%PDF")
         assert len(pdf.content) > 2_000
+
+        reindex = client.post(f"/api/v1/cases/{case_id}/reindex", headers=headers)
+        assert reindex.status_code == 202, reindex.text
+        jobs = client.get(f"/api/v1/cases/{case_id}/reindex-jobs", headers=headers)
+        assert jobs.status_code == 200
+        assert jobs.json()[0]["status"] == "completed"

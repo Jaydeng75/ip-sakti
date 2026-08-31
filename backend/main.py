@@ -9,6 +9,7 @@ from typing import Annotated
 
 import jwt
 from fastapi import (
+    BackgroundTasks,
     Depends,
     FastAPI,
     File,
@@ -41,6 +42,7 @@ from schemas import (
     ExpertReviewResponse,
     LoginRequest,
     RegisterRequest,
+    SourceMonitorRequest,
     TokenResponse,
     UserResponse,
 )
@@ -63,8 +65,12 @@ from services.intelligence import (
     answer_question,
     list_sources,
 )
+from services.jobs import run_reindex_job
+from services.observability import configure_observability
 from services.rate_limit import InMemoryRateLimitMiddleware
 from services.reporting import build_pdf_report
+from services.retrieval import embedding_identity
+from services.source_monitor import check_source, public_snapshot
 from services.storage_service import save_upload
 from services.translation import normalize_language, translate_text
 
@@ -87,6 +93,22 @@ def validate_runtime() -> None:
             raise RuntimeError("IPSAKTI_TRANSLATION_SERVICE_TOKEN is required when translation is enabled in production.")
         if settings.database_url.startswith("sqlite"):
             raise RuntimeError("PostgreSQL is required in production.")
+        if settings.embedding_provider == "deterministic":
+            raise RuntimeError("A neural IPSAKTI_EMBEDDING_PROVIDER is required in production.")
+        if settings.embedding_allow_fallback:
+            raise RuntimeError("IPSAKTI_EMBEDDING_ALLOW_FALLBACK must be false in production.")
+        if settings.embedding_revision.lower() in {"", "main", "latest"} or settings.embedding_revision.startswith(
+            "review-and-pin"
+        ):
+            raise RuntimeError("Pin an approved embedding revision before production.")
+        if settings.reranker_provider != "http" or not settings.reranker_url:
+            raise RuntimeError("A dedicated neural reranker endpoint is required in production.")
+        if settings.reranker_revision.lower() in {"", "main", "latest"} or settings.reranker_revision.startswith(
+            "review-and-pin"
+        ):
+            raise RuntimeError("Pin an approved reranker revision before production.")
+        if not settings.otel_enabled or not settings.otel_exporter_endpoint:
+            raise RuntimeError("Production requires OpenTelemetry and an approved OTLP exporter endpoint.")
 
 
 def bootstrap_admin() -> None:
@@ -184,6 +206,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
+configure_observability(app)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.hosts)
 app.add_middleware(
     InMemoryRateLimitMiddleware,
@@ -313,6 +336,11 @@ def require_case(db: Session, case_id: int, user: models.User) -> models.Innovat
     return case
 
 
+def require_admin(user: models.User) -> None:
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+
 def latest_analysis(db: Session, case_id: int) -> models.AnalysisRun:
     run = db.scalar(
         select(models.AnalysisRun)
@@ -343,7 +371,16 @@ def liveness():
 @app.get("/health/ready", tags=["health"])
 def readiness(db: Db):
     db.execute(select(1))
-    return {"status": "ready", "corpus_version": settings.corpus_version}
+    identity = embedding_identity()
+    return {
+        "status": "ready",
+        "corpus_version": settings.corpus_version,
+        "embedding_provider": identity["provider"],
+        "embedding_model": identity["model"],
+        "embedding_revision": identity["revision"],
+        "reranker_provider": settings.reranker_provider,
+        "reranker_model": settings.reranker_model,
+    }
 
 
 @app.post(
@@ -629,6 +666,18 @@ def challenge(case_id: int, db: Db, user: CurrentUser):
     return latest_analysis(db, case_id).result["challenges"]
 
 
+@app.get(f"{settings.api_prefix}/cases/{{case_id}}/claim-evidence-graph", tags=["intelligence"])
+def claim_evidence_graph(case_id: int, db: Db, user: CurrentUser):
+    require_case(db, case_id, user)
+    return latest_analysis(db, case_id).result["claim_evidence_graph"]
+
+
+@app.get(f"{settings.api_prefix}/cases/{{case_id}}/design-around", tags=["intelligence"])
+def design_around(case_id: int, db: Db, user: CurrentUser):
+    require_case(db, case_id, user)
+    return latest_analysis(db, case_id).result["design_around"]
+
+
 @app.get(f"{settings.api_prefix}/sources", tags=["sources"])
 def sources(
     user: CurrentUser,
@@ -639,6 +688,23 @@ def sources(
         "corpus_version": settings.corpus_version,
         "sources": list_sources(jurisdiction),
     }
+
+
+@app.get(f"{settings.api_prefix}/sources/changes", tags=["sources"])
+def source_changes(db: Db, user: CurrentUser):
+    del user
+    snapshots = db.scalars(select(models.SourceSnapshot).order_by(desc(models.SourceSnapshot.checked_at)).limit(100))
+    return {"snapshots": [public_snapshot(snapshot) for snapshot in snapshots]}
+
+
+@app.post(f"{settings.api_prefix}/admin/sources/monitor", tags=["admin"])
+def monitor_sources(payload: SourceMonitorRequest, db: Db, user: CurrentUser):
+    require_admin(user)
+    selected = [source for source in list_sources(None) if not payload.source_ids or source["id"] in payload.source_ids]
+    snapshots = [check_source(db, source) for source in selected]
+    audit(db, user.id, "sources.monitored", "source_registry", None, {"source_count": len(snapshots)})
+    db.commit()
+    return {"snapshots": [public_snapshot(snapshot) for snapshot in snapshots]}
 
 
 @app.post(
@@ -701,6 +767,46 @@ def get_documents(case_id: int, db: Db, user: CurrentUser):
             **document_status(db, item),
         }
         for item in documents
+    ]
+
+
+@app.post(f"{settings.api_prefix}/cases/{{case_id}}/reindex", status_code=202, tags=["evidence"])
+def reindex_case(case_id: int, background_tasks: BackgroundTasks, db: Db, user: CurrentUser):
+    case = require_case(db, case_id, user)
+    identity = embedding_identity()
+    job = models.ReindexJob(
+        case_id=case.id,
+        requested_by=user.id,
+        embedding_model=identity["model"],
+        embedding_revision=identity["revision"],
+        result={},
+    )
+    db.add(job)
+    db.flush()
+    audit(db, user.id, "evidence.reindex_queued", "case", case.id, {"job_id": job.id})
+    db.commit()
+    background_tasks.add_task(run_reindex_job, job.id)
+    return {"id": job.id, "status": job.status, "embedding_model": job.embedding_model, "embedding_revision": job.embedding_revision}
+
+
+@app.get(f"{settings.api_prefix}/cases/{{case_id}}/reindex-jobs", tags=["evidence"])
+def reindex_jobs(case_id: int, db: Db, user: CurrentUser):
+    require_case(db, case_id, user)
+    jobs = db.scalars(
+        select(models.ReindexJob).where(models.ReindexJob.case_id == case_id).order_by(desc(models.ReindexJob.created_at))
+    )
+    return [
+        {
+            "id": job.id,
+            "status": job.status,
+            "embedding_model": job.embedding_model,
+            "embedding_revision": job.embedding_revision,
+            "result": job.result,
+            "error": job.error,
+            "created_at": job.created_at,
+            "completed_at": job.completed_at,
+        }
+        for job in jobs
     ]
 
 

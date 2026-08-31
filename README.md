@@ -13,7 +13,10 @@ Source-grounded innovation intelligence for Ayurvedic and biological-resource pr
 - Split-screen Ask IP-SAKTI experience with clickable official citations and claim-type labels.
 - IndicTrans2 multilingual input/output for all 22 scheduled Indian languages, with explicit machine-translation provenance and the authoritative English answer retained.
 - Evidence uploads restricted to PDF/TXT/DOCX, format and expansion checked, optionally scanned by ClamAV, stored with SHA-256 integrity metadata, extracted, chunked and indexed.
-- Case-document retrieval combines lexical relevance and deterministic vector fingerprints, preserving document, page/chunk, retrieval score and content hash for every citation.
+- Case-document retrieval uses a configurable multilingual embedding provider, PostgreSQL full-text/pgvector candidate prefetch and a configurable reranker. Development retains an explicitly labelled deterministic outage fallback.
+- Every indexed chunk records embedding provider, model and revision; every retrieved citation records lexical, semantic and reranker scores plus page/chunk and content-hash lineage.
+- Analysis now includes a claim-to-evidence provenance graph and an Innovation Design-Around workspace that converts reviewer objections into testable technical alternatives.
+- Versioned reindex jobs and authoritative-source snapshots support model migrations and legal-change review.
 - Human expert-review requests and branded PDF decision records with evidence registers, run/corpus identifiers and report hashes.
 - Tamper-evident SHA-256 audit chaining, case-level audit history and administrator integrity verification.
 - Alembic-managed schema baseline, controlled production Compose overlay, request rate limits, trusted hosts and browser/API security headers.
@@ -116,6 +119,34 @@ pytest -q
 ## Source and decision-safety model
 
 `backend/data/sources.json` is a versioned curated registry of primary law, official regulation/guidance and treaty sources. The engine does not claim that this small registry is a comprehensive patent, TKDL, scientific-literature or regulatory corpus. If retrieval does not find relevant support, Ask IP-SAKTI abstains. All screening conclusions require human review.
+
+## Evidence assurance and retrieval
+
+Development defaults to `IPSAKTI_EMBEDDING_PROVIDER=deterministic` so the repository runs offline. This fallback is a feature hash, not a neural embedding and not an accuracy claim. Production startup rejects it.
+
+For production, configure an OpenAI-compatible embeddings endpoint and a reranker endpoint:
+
+```dotenv
+IPSAKTI_EMBEDDING_PROVIDER=http
+IPSAKTI_EMBEDDING_URL=https://embedding.internal.example/v1
+IPSAKTI_EMBEDDING_API_KEY=...
+IPSAKTI_EMBEDDING_MODEL=intfloat/multilingual-e5-small
+IPSAKTI_EMBEDDING_REVISION=614241f622f53c4eeff9890bdc4f31cfecc418b3
+IPSAKTI_EMBEDDING_DIMENSIONS=384
+IPSAKTI_EMBEDDING_ALLOW_FALLBACK=false
+IPSAKTI_RETRIEVAL_PREFETCH_LIMIT=50
+IPSAKTI_RERANKER_PROVIDER=http
+IPSAKTI_RERANKER_URL=https://reranker.internal.example/v1
+IPSAKTI_RERANKER_API_KEY=...
+IPSAKTI_RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+IPSAKTI_RERANKER_REVISION=953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e
+```
+
+The retrieval sequence is: PostgreSQL lexical and pgvector prefetch → score fusion → neural or explicitly labelled heuristic reranking → evidence-signal/abstention gate → top cited passages. Dense similarity alone cannot force a citation. Run `python evaluation.py` inside the backend environment to produce the starter retrieval report. The included dataset is an engineering smoke set; it must be replaced or supplemented with an expert-labelled bilingual benchmark before publishing an accuracy percentage.
+
+The repository includes an opt-in self-hosted service using Sentence Transformers. Start it with `docker compose --profile neural up -d retrieval`, then configure the backend with `IPSAKTI_EMBEDDING_PROVIDER=http`, `IPSAKTI_EMBEDDING_URL=http://retrieval:8200/v1`, `IPSAKTI_RERANKER_PROVIDER=http` and `IPSAKTI_RERANKER_URL=http://retrieval:8200/v1`. The first request downloads substantial model weights. The checked-in defaults pin the reviewed model commits above; deployments must still validate those exact artifacts and protect the service with `RETRIEVAL_SERVICE_TOKEN`.
+
+`POST /api/v1/cases/{case_id}/reindex` queues a versioned reindex job. `GET /api/v1/cases/{case_id}/reindex-jobs` exposes its status. Administrators can snapshot curated sources with `POST /api/v1/admin/sources/monitor`; detected changes remain review flags and are never silently treated as updated legal conclusions.
 
 Traditional use is kept explicitly separate from clinically established efficacy. Jurisdictions are not merged into one rule set. Treaty status is described separately from domestic implementation.
 

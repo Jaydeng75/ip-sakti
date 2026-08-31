@@ -9,6 +9,7 @@ const links = [
   ["Dashboard", "/dashboard"],
   ["Analyze Innovation", "/analyze"],
   ["Challenge My Innovation", "/challenge"],
+  ["Design Around", "/design-around"],
   ["Ask IP-SAKTI", "/ask"],
   ["Scientific Evidence", "/evidence"],
   ["Traditional Knowledge", "/traditional-knowledge"],

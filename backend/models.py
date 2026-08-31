@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from config import settings
 from database import Base
 
 
@@ -111,6 +113,12 @@ class EvidenceChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     token_count: Mapped[int] = mapped_column(Integer)
     embedding: Mapped[list] = mapped_column(JSON, default=list)
+    embedding_vector: Mapped[list | None] = mapped_column(
+        Vector(settings.embedding_dimensions).with_variant(JSON(), "sqlite"), nullable=True
+    )
+    embedding_provider: Mapped[str] = mapped_column(String(60), default="deterministic")
+    embedding_model: Mapped[str] = mapped_column(String(180), default="blake2b-feature-hash")
+    embedding_revision: Mapped[str] = mapped_column(String(100), default="v1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     document: Mapped[UploadedDocument] = relationship(back_populates="chunks")
@@ -138,3 +146,34 @@ class AuditLog(Base):
     entity_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     details: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class ReindexJob(Base):
+    __tablename__ = "reindex_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("innovation_cases.id", ondelete="CASCADE"), index=True)
+    requested_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
+    embedding_model: Mapped[str] = mapped_column(String(180))
+    embedding_revision: Mapped[str] = mapped_column(String(100))
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SourceSnapshot(Base):
+    __tablename__ = "source_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(120), index=True)
+    url: Mapped[str] = mapped_column(Text)
+    content_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    etag: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_modified: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="unchecked", index=True)
+    change_summary: Mapped[dict] = mapped_column(JSON, default=dict)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

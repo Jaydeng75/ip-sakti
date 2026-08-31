@@ -95,6 +95,12 @@ class Citation(BaseModel):
     source_type: Literal["official", "case_document"] = "official"
     content_sha256: str | None = None
     retrieval_score: float | None = None
+    lexical_score: float | None = None
+    semantic_score: float | None = None
+    rerank_score: float | None = None
+    prefetch_rank: int | None = None
+    embedding_model: str | None = None
+    reranker: str | None = None
 
 
 class TranslationInfo(BaseModel):
@@ -145,3 +151,7 @@ class AuditResponse(BaseModel):
     entity_id: str | None
     details: dict[str, Any]
     created_at: datetime
+
+
+class SourceMonitorRequest(BaseModel):
+    source_ids: list[str] = Field(default_factory=list, max_length=100)

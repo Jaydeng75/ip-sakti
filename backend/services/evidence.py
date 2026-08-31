@@ -1,4 +1,3 @@
-import hashlib
 import math
 import re
 from collections import Counter
@@ -11,14 +10,19 @@ import pytesseract
 from docx import Document as DocxDocument
 from PIL import Image
 from pypdf import PdfReader
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 import models
 from config import settings
+from services.retrieval import (
+    embedding_client,
+    embedding_identity,
+    passes_evidence_gate,
+    reranker_client,
+)
+from services.retrieval import tokens as retrieval_tokens
 
-WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{1,}")
-EMBEDDING_DIMENSIONS = 256
 CHUNK_CHARACTERS = 1_400
 CHUNK_OVERLAP = 220
 
@@ -110,31 +114,32 @@ def chunk_pages(pages: list[ExtractedPage]) -> list[dict[str, Any]]:
                         "section": _section_label(content),
                         "content": content,
                         "token_count": len(_tokens(content)),
-                        "embedding": embed_text(content),
                     }
                 )
             if end >= len(text):
                 break
             start = max(start + 1, end - CHUNK_OVERLAP)
+    batch = embedding_client().documents([chunk["content"] for chunk in chunks])
+    for chunk, vector in zip(chunks, batch.vectors, strict=True):
+        chunk.update(
+            {
+                "embedding": vector,
+                "embedding_vector": vector,
+                "embedding_provider": batch.provider,
+                "embedding_model": batch.model,
+                "embedding_revision": batch.revision,
+            }
+        )
     return chunks
 
 
 def _tokens(text: str) -> list[str]:
-    return [match.group(0).lower() for match in WORD_RE.finditer(text)]
+    return retrieval_tokens(text)
 
 
 def embed_text(text: str) -> list[float]:
-    """Deterministic local semantic fingerprint used when no external embedding service is configured."""
-    vector = [0.0] * EMBEDDING_DIMENSIONS
-    tokens = _tokens(text)
-    features = tokens + [f"{left}:{right}" for left, right in zip(tokens, tokens[1:], strict=False)]
-    for feature in features:
-        digest = hashlib.blake2b(feature.encode("utf-8"), digest_size=8).digest()
-        index = int.from_bytes(digest[:4], "big") % EMBEDDING_DIMENSIONS
-        sign = 1.0 if digest[4] & 1 else -1.0
-        vector[index] += sign
-    norm = math.sqrt(sum(value * value for value in vector)) or 1.0
-    return [round(value / norm, 6) for value in vector]
+    """Compatibility helper; production indexing uses the configured batch embedding provider."""
+    return embedding_client().query(text).vectors[0]
 
 
 def _cosine(left: list[float], right: list[float]) -> float:
@@ -158,12 +163,16 @@ def index_document(db: Session, document: models.UploadedDocument) -> dict[str, 
             )
         )
     db.flush()
+    embedding = chunks[0] if chunks else {}
     return {
         "status": "indexed",
         "page_count": len(pages),
         "chunk_count": len(chunks),
         "ocr_pages": sum(page.extraction_method == "ocr" for page in pages),
         "ocr_required": False,
+        "embedding_provider": embedding.get("embedding_provider"),
+        "embedding_model": embedding.get("embedding_model"),
+        "embedding_revision": embedding.get("embedding_revision"),
     }
 
 
@@ -179,50 +188,121 @@ def document_status(db: Session, document: models.UploadedDocument) -> dict[str,
         "page_count": len(pages) or (1 if chunks else 0),
         "chunk_count": len(chunks),
         "ocr_required": False,
+        "embedding_provider": chunks[0].embedding_provider if chunks else None,
+        "embedding_model": chunks[0].embedding_model if chunks else None,
+        "embedding_revision": chunks[0].embedding_revision if chunks else None,
     }
 
 
 def retrieve_case_evidence(
     db: Session, case_id: int, query: str, limit: int = 6, minimum_score: float = 0.08
 ) -> list[dict[str, Any]]:
-    rows = db.execute(
-        select(models.EvidenceChunk, models.UploadedDocument)
-        .join(models.UploadedDocument, models.EvidenceChunk.document_id == models.UploadedDocument.id)
-        .where(models.EvidenceChunk.case_id == case_id)
-    ).all()
-    if not rows:
-        return []
-
     query_tokens = _tokens(query)
     if not query_tokens:
         return []
+    prefetch_limit = max(limit, settings.retrieval_prefetch_limit)
+    query_batch = embedding_client().query(query)
+    query_embedding = query_batch.vectors[0]
+    base_query = (
+        select(models.EvidenceChunk, models.UploadedDocument)
+        .join(models.UploadedDocument, models.EvidenceChunk.document_id == models.UploadedDocument.id)
+        .where(models.EvidenceChunk.case_id == case_id)
+    )
+    if db.bind and db.bind.dialect.name == "postgresql" and query_batch.provider != "deterministic-fallback":
+        semantic_rows = db.execute(
+            base_query.where(models.EvidenceChunk.embedding_vector.is_not(None))
+            .order_by(models.EvidenceChunk.embedding_vector.cosine_distance(query_embedding))
+            .limit(prefetch_limit)
+        ).all()
+        search_query = func.plainto_tsquery("simple", query)
+        lexical_rows = db.execute(
+            base_query.order_by(
+                func.ts_rank_cd(func.to_tsvector("simple", models.EvidenceChunk.content), search_query).desc()
+            ).limit(prefetch_limit)
+        ).all()
+        rows_by_id = {chunk.id: (chunk, document) for chunk, document in [*semantic_rows, *lexical_rows]}
+        rows = list(rows_by_id.values())
+    else:
+        rows = db.execute(base_query).all()
+    if not rows:
+        return []
+
     query_counts = Counter(query_tokens)
-    query_embedding = embed_text(query)
-    scored: list[tuple[float, models.EvidenceChunk, models.UploadedDocument]] = []
+    prefetched: list[dict[str, Any]] = []
     for chunk, document in rows:
         content_tokens = Counter(_tokens(chunk.content))
         lexical = sum(min(count, content_tokens.get(token, 0)) for token, count in query_counts.items())
         lexical /= max(1.0, math.sqrt(len(query_tokens) * max(1, chunk.token_count)))
-        semantic = max(0.0, _cosine(query_embedding, chunk.embedding or []))
-        score = 0.72 * lexical + 0.28 * semantic
-        if score >= minimum_score:
-            scored.append((score, chunk, document))
-
-    matches = sorted(scored, key=lambda item: item[0], reverse=True)[:limit]
+        stored_embedding = (
+            chunk.embedding_vector
+            if chunk.embedding_vector is not None
+            else (chunk.embedding or [])
+        )
+        semantic = max(0.0, _cosine(query_embedding, stored_embedding))
+        hybrid = settings.retrieval_lexical_weight * lexical + settings.retrieval_semantic_weight * semantic
+        prefetched.append(
+            {
+                "hybrid_score": hybrid,
+                "lexical_score": lexical,
+                "semantic_score": semantic,
+                "chunk": chunk,
+                "document": document,
+            }
+        )
+    prefetched.sort(key=lambda item: item["hybrid_score"], reverse=True)
+    prefetched = prefetched[:prefetch_limit]
+    rerank_scores, reranker = reranker_client().score(
+        query, [item["chunk"].content for item in prefetched]
+    )
+    for rank, (item, rerank_score) in enumerate(zip(prefetched, rerank_scores, strict=True), start=1):
+        item["prefetch_rank"] = rank
+        item["rerank_score"] = rerank_score
+        item["score"] = 0.45 * item["hybrid_score"] + 0.55 * rerank_score
+    matches = [
+        item
+        for item in sorted(prefetched, key=lambda candidate: candidate["score"], reverse=True)
+        if passes_evidence_gate(
+            lexical_score=item["lexical_score"],
+            rerank_score=item["rerank_score"],
+            combined_score=item["score"],
+            minimum_score=minimum_score,
+        )
+    ][:limit]
     return [
         {
-            "score": round(score, 4),
-            "content": chunk.content,
-            "page_number": chunk.page_number,
-            "section": chunk.section,
-            "chunk_index": chunk.chunk_index,
-            "document_id": document.id,
-            "filename": document.filename,
-            "sha256": document.sha256,
-            "media_type": document.media_type,
+            "score": round(item["score"], 4),
+            "lexical_score": round(item["lexical_score"], 4),
+            "semantic_score": round(item["semantic_score"], 4),
+            "rerank_score": round(item["rerank_score"], 4),
+            "prefetch_rank": item["prefetch_rank"],
+            "embedding_provider": query_batch.provider,
+            "embedding_model": query_batch.model,
+            "embedding_revision": query_batch.revision,
+            "reranker": reranker,
+            "content": item["chunk"].content,
+            "page_number": item["chunk"].page_number,
+            "section": item["chunk"].section,
+            "chunk_index": item["chunk"].chunk_index,
+            "document_id": item["document"].id,
+            "filename": item["document"].filename,
+            "sha256": item["document"].sha256,
+            "media_type": item["document"].media_type,
         }
-        for score, chunk, document in matches
+        for item in matches
     ]
+
+
+def retrieval_status(matches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    first = (matches or [{}])[0]
+    identity = embedding_identity()
+    return {
+        "method": "hybrid lexical + dense retrieval with candidate prefetch and reranking",
+        "prefetch_limit": settings.retrieval_prefetch_limit,
+        "embedding_provider": first.get("embedding_provider", identity["provider"]),
+        "embedding_model": first.get("embedding_model", identity["model"]),
+        "embedding_revision": first.get("embedding_revision", identity["revision"]),
+        "reranker": first.get("reranker", settings.reranker_model if settings.reranker_provider == "http" else "heuristic-coverage-v1"),
+    }
 
 
 def evidence_citation(case_id: int, match: dict[str, Any]) -> dict[str, Any]:
@@ -245,6 +325,12 @@ def evidence_citation(case_id: int, match: dict[str, Any]) -> dict[str, Any]:
         "source_type": "case_document",
         "content_sha256": match["sha256"],
         "retrieval_score": match["score"],
+        "lexical_score": match.get("lexical_score"),
+        "semantic_score": match.get("semantic_score"),
+        "rerank_score": match.get("rerank_score"),
+        "prefetch_rank": match.get("prefetch_rank"),
+        "embedding_model": match.get("embedding_model"),
+        "reranker": match.get("reranker"),
     }
 
 

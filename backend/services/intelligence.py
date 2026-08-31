@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Any
 
 from config import settings
-from services.evidence import evidence_citation
+from services.assurance import build_claim_evidence_graph, build_design_around
+from services.evidence import evidence_citation, retrieval_status
 
 SOURCE_PATH = Path(__file__).resolve().parents[1] / "data" / "sources.json"
 DISCLAIMER = (
@@ -626,23 +627,39 @@ def analyze_case(
         "chunk_count": 0,
     }
     classification = classify_product(case)
+    risks = build_risks(case)
+    ip_strategy = build_ip_strategy(case)
+    challenges = build_challenges(case, evidence_matches)
+    claim_graph = build_claim_evidence_graph(classification, risks, challenges)
+    design_around = build_design_around(
+        case,
+        ip_strategy,
+        challenges,
+        [
+            public_citation("india-patents-act-1970"),
+            public_citation("india-tkdl"),
+            public_citation("india-biological-diversity-act-2002"),
+        ],
+    )
     result = {
         "case": {"id": case.id, "title": case.title, "status": "analyzed"},
         "executive_summary": "This is a screening analysis. The strongest defensible value is likely to sit in verified technical differentiation, controlled know-how and brand assets; traditional-knowledge, classification, evidence and biological-resource questions need documented review.",
         "classification": classification,
         "genome": build_genome(case),
-        "risk_cards": build_risks(case),
+        "risk_cards": risks,
         "knowledge_graph": build_knowledge_graph(case, evidence_matches),
         "scientific_evidence": build_evidence(case, evidence_matches),
-        "ip_strategy": build_ip_strategy(case),
+        "ip_strategy": ip_strategy,
         "regulatory_abs": build_regulatory(case, classification),
         "jurisdictions": build_jurisdictions(case),
-        "challenges": build_challenges(case, evidence_matches),
+        "challenges": challenges,
+        "claim_evidence_graph": claim_graph,
+        "design_around": design_around,
         "evidence_retrieval": {
             **evidence_overview,
             "retrieved_passage_count": len(evidence_matches),
             "citations": [evidence_citation(case.id, match) for match in evidence_matches],
-            "method": "hybrid lexical and deterministic vector retrieval",
+            **retrieval_status(evidence_matches),
             "appraisal_status": "human appraisal required",
         },
         "next_actions": [
@@ -661,7 +678,7 @@ def analyze_case(
             ),
         },
         "corpus_version": settings.corpus_version,
-        "generated_by": "IP-SAKTI hybrid evidence retrieval and grounded screening engine",
+        "generated_by": "IP-SAKTI evidence assurance engine with hybrid retrieval, reranking and claim provenance",
         "warnings": [
             DISCLAIMER,
             "Legal and regulatory requirements can change; citations show the source date or status available in the registry.",
