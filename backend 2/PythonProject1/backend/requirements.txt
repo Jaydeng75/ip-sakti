@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+bcrypt==4.0.1
+passlib
+python-jose[cryptography]
+python-multipart
+slowapi
+qdrant-client
+sentence-transformers
+fastembed
+pdfplumber
