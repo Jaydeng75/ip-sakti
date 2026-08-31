@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { logout } from "@/lib/api";
 
 const links = [
   ["Dashboard", "/dashboard"],
@@ -19,6 +21,7 @@ const links = [
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
 
   return (
     <>
@@ -123,8 +126,9 @@ export default function Sidebar() {
           </p>
 
           <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-[#7A847F]">
-            Development
+            Controlled workspace
           </p>
+          <button type="button" onClick={() => { logout(); router.push("/login"); }} className="mt-4 text-xs font-semibold text-[#0F6B5C] hover:underline">Sign out</button>
         </div>
       </aside>
     </>

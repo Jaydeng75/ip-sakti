@@ -8,12 +8,16 @@ Source-grounded innovation intelligence for Ayurvedic and biological-resource pr
 - Seven priority workspaces: Dashboard, Analyze Innovation, Traditional Knowledge graph, Scientific Evidence, IP Strategy, Jurisdiction Compare and Challenge My Innovation.
 - Persistent case context shared across modules and a saved-case portfolio.
 - FastAPI API with registration/login, Argon2 password hashing, signed JWT sessions, owner isolation, role checks and audit records.
-- Deterministic grounded screening engine with explicit confidence, source status, jurisdiction, effective date, limitations and safe abstention.
+- Hybrid evidence-retrieval and grounded screening engine with explicit confidence, source status, jurisdiction, effective date, limitations and safe abstention.
 - Product classification, innovation genome, TK/prior-art graph, evidence separation, multi-route IP strategy, six-step regulatory/ABS flow and India/EU/US/international comparison.
 - Split-screen Ask IP-SAKTI experience with clickable official citations and claim-type labels.
 - IndicTrans2 multilingual input/output for all 22 scheduled Indian languages, with explicit machine-translation provenance and the authoritative English answer retained.
-- Evidence uploads restricted to PDF/TXT/DOCX, size checked, PDF signature checked and stored with SHA-256 integrity metadata.
-- Human expert-review requests and structured case-report exports.
+- Evidence uploads restricted to PDF/TXT/DOCX, format and expansion checked, optionally scanned by ClamAV, stored with SHA-256 integrity metadata, extracted, chunked and indexed.
+- Case-document retrieval combines lexical relevance and deterministic vector fingerprints, preserving document, page/chunk, retrieval score and content hash for every citation.
+- Human expert-review requests and branded PDF decision records with evidence registers, run/corpus identifiers and report hashes.
+- Tamper-evident SHA-256 audit chaining, case-level audit history and administrator integrity verification.
+- Alembic-managed schema baseline, controlled production Compose overlay, request rate limits, trusted hosts and browser/API security headers.
+- Three pre-analysed demo cases are seeded for the local demo account.
 - SQLite for simple local development and PostgreSQL in the supplied Compose stack.
 - Backend tests, Python linting, frontend linting and production builds.
 
@@ -46,7 +50,7 @@ The duplicate `backend 2` prototype, committed bytecode, local databases, vector
 
 4. Open [http://localhost:3000](http://localhost:3000). API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs) in development. The first multilingual request downloads the selected models and can take several minutes; the model cache is persisted in a Docker volume.
 
-The Compose configuration enables demo authentication for local evaluation only. Production startup rejects demo mode and a default/short signing key.
+The Compose configuration enables demo authentication for local evaluation only. Production startup rejects demo mode, public self-registration, a default/short signing key and disabled malware scanning.
 
 ## Run without Docker
 
@@ -56,7 +60,7 @@ Backend:
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp .env.example .env
 uvicorn main:app --reload
 ```
@@ -104,8 +108,9 @@ pytest -q
 - `GET|POST /api/v1/cases`, `GET|PATCH|DELETE /api/v1/cases/{id}`
 - `POST /api/v1/cases/{id}/analyze`, `GET /api/v1/cases/{id}/analysis/latest`
 - `POST /api/v1/cases/{id}/ask`, `GET /api/v1/cases/{id}/challenge`
-- `POST|GET /api/v1/cases/{id}/documents`
-- `POST /api/v1/cases/{id}/expert-review`, `GET /api/v1/cases/{id}/report`
+- `POST|GET /api/v1/cases/{id}/documents`, authenticated document content and deletion endpoints
+- `POST /api/v1/cases/{id}/expert-review`, `GET /api/v1/cases/{id}/report?format=pdf`
+- `GET /api/v1/cases/{id}/audit`, `GET /api/v1/admin/audit/integrity`
 - `GET /api/v1/sources`, `GET /api/v1/admin/audit`
 
 ## Source and decision-safety model
@@ -114,15 +119,10 @@ pytest -q
 
 Traditional use is kept explicitly separate from clinically established efficacy. Jurisdictions are not merged into one rule set. Treaty status is described separately from domestic implementation.
 
-## Production deployment checklist
+## Deployment and demonstration
 
-- Set `IPSAKTI_ENVIRONMENT=production`, a random `IPSAKTI_SECRET_KEY`, PostgreSQL TLS credentials and the exact allowed origin list.
-- Keep `IPSAKTI_DEMO_MODE=false`; connect enterprise identity/SSO if public self-registration is inappropriate.
-- Put the API behind TLS, a WAF/API gateway, rate limiting and centralized secret management.
-- Use object storage with malware scanning and retention policies for uploaded evidence.
-- Add managed database backups, schema migration automation, log redaction, monitoring and alerting.
-- Replace/extend the curated registry with licensed patent, TKDL-authorized, legal and scientific corpora; add document-level ingestion, chunk lineage and retrieval evaluation.
-- Run IndicTrans2 behind an authenticated private service, pin reviewed model revisions, monitor latency/memory and validate legal terminology with bilingual experts. Translations must remain labelled as machine-generated rather than authoritative legal text.
-- Have qualified patent, regulatory, ABS and scientific experts approve the corpus, rules and disclaimers before real decisions or filings.
+Use `docker-compose.production.yml` as an overlay only after supplying its required secrets, TLS PostgreSQL URL, exact origins/hosts and approved ClamAV endpoint. Run `alembic upgrade head` as part of each release; the backend container performs this automatically.
 
-This repository is a production-oriented engineering baseline and decision-support prototype. It is not, by itself, a legally complete production service or professional advice.
+See [docs/DEMO_GUIDE.md](docs/DEMO_GUIDE.md) for the five-minute judge flow and [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) for implemented controls, deployment requirements and external approval gates.
+
+This repository is a deployable, evidence-grounded decision-support platform. A real legal deployment still depends on approved infrastructure, licensed/authorized data and qualified professional validation; software cannot substitute for those external controls.

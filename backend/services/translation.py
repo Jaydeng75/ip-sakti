@@ -76,6 +76,7 @@ async def translate_text(text: str, source_language: str, target_language: str) 
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 f"{settings.translation_url.rstrip('/')}/translate",
+                headers={"X-Service-Token": settings.translation_service_token or ""},
                 json={
                     "texts": [text],
                     "source_language": source_code,

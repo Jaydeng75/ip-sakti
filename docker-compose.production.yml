@@ -1,0 +1,37 @@
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    restart: unless-stopped
+
+  backend:
+    environment:
+      IPSAKTI_ENVIRONMENT: production
+      IPSAKTI_SECRET_KEY: ${IPSAKTI_SECRET_KEY:?Set IPSAKTI_SECRET_KEY}
+      IPSAKTI_DATABASE_URL: ${IPSAKTI_DATABASE_URL:?Set a TLS-enabled managed PostgreSQL URL}
+      IPSAKTI_ALLOWED_ORIGINS: ${IPSAKTI_ALLOWED_ORIGINS:?Set the exact frontend origin}
+      IPSAKTI_PUBLIC_API_URL: ${IPSAKTI_PUBLIC_API_URL:?Set the public API URL}
+      IPSAKTI_TRUSTED_HOSTS: ${IPSAKTI_TRUSTED_HOSTS:?Set expected API hosts}
+      IPSAKTI_DEMO_MODE: "false"
+      IPSAKTI_REGISTRATION_ENABLED: "false"
+      IPSAKTI_TRANSLATION_SERVICE_TOKEN: ${TRANSLATION_SERVICE_TOKEN:?Set TRANSLATION_SERVICE_TOKEN}
+      IPSAKTI_MALWARE_SCAN_ENABLED: "true"
+      IPSAKTI_CLAMAV_HOST: ${IPSAKTI_CLAMAV_HOST:?Set the approved ClamAV host}
+      IPSAKTI_CLAMAV_PORT: ${IPSAKTI_CLAMAV_PORT:-3310}
+      IPSAKTI_BOOTSTRAP_ADMIN_EMAIL: ${IPSAKTI_BOOTSTRAP_ADMIN_EMAIL:-}
+      IPSAKTI_BOOTSTRAP_ADMIN_PASSWORD: ${IPSAKTI_BOOTSTRAP_ADMIN_PASSWORD:-}
+    restart: unless-stopped
+
+  translation:
+    environment:
+      INDICTRANS_SERVICE_TOKEN: ${TRANSLATION_SERVICE_TOKEN:?Set TRANSLATION_SERVICE_TOKEN}
+      INDICTRANS_PRELOAD_MODELS: "true"
+    ports: !reset []
+    restart: unless-stopped
+
+  frontend:
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set the public API URL ending in /api/v1}
+        NEXT_PUBLIC_DEMO_AUTH: "false"
+    restart: unless-stopped

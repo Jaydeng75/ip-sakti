@@ -91,6 +91,10 @@ class Citation(BaseModel):
     url: str
     support_status: str
     excerpt: str
+    locator: str | None = None
+    source_type: Literal["official", "case_document"] = "official"
+    content_sha256: str | None = None
+    retrieval_score: float | None = None
 
 
 class TranslationInfo(BaseModel):

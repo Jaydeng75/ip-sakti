@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from config import settings
+from services.evidence import evidence_citation
 
 SOURCE_PATH = Path(__file__).resolve().parents[1] / "data" / "sources.json"
 DISCLAIMER = (
@@ -31,6 +32,7 @@ def public_citation(source_id: str, excerpt: str | None = None) -> dict[str, str
         "url": source["url"],
         "support_status": source["support_status"],
         "excerpt": excerpt or source["summary"],
+        "source_type": "official",
     }
 
 
@@ -167,7 +169,7 @@ def build_risks(case: Any) -> list[dict[str, Any]]:
     regulatory_score = 82 if _contains(text, ["treat", "cure", "disease", "therapeutic"]) else 61
     abs_score = 79 if (case.biological_sourcing or case.ingredients) else 34
     evidence_score = 66 if _contains(text, ["trial", "study", "clinical", "assay", "validated"]) else 31
-    return [
+    risks = [
         {
             "key": "traditional_knowledge",
             "title": "Traditional Knowledge Risk",
@@ -204,9 +206,20 @@ def build_risks(case: Any) -> list[dict[str, Any]]:
             "summary": "Traditional use is not equivalent to clinically established efficacy; claim-specific modern evidence is needed.",
         },
     ]
+    support = {
+        "traditional_knowledge": ["india-tkdl", "india-patents-act-1970"],
+        "patent_opportunity": ["india-patents-act-1970", "wto-trips"],
+        "regulatory": ["drugs-cosmetics-act-india", "fssai-ayurveda-aahara-2022"],
+        "abs": ["india-biological-diversity-act-2002", "cbd-nagoya-protocol"],
+        "evidence": ["us-fda-botanical-drug-guidance", "eu-traditional-herbal-medicinal-products"],
+    }
+    for risk in risks:
+        risk["claim_type"] = "inference"
+        risk["citations"] = [public_citation(source_id) for source_id in support[risk["key"]]]
+    return risks
 
 
-def build_knowledge_graph(case: Any) -> dict[str, Any]:
+def build_knowledge_graph(case: Any, evidence_matches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     ingredients = case.ingredients or ["Unspecified botanical resource"]
     nodes = [
         {
@@ -272,25 +285,49 @@ def build_knowledge_graph(case: Any) -> dict[str, Any]:
         }
         for index, _ in enumerate(ingredients[:6])
     )
+    document_citations = []
+    for index, match in enumerate((evidence_matches or [])[:4]):
+        node_id = f"document-{match['document_id']}-{match['chunk_index']}"
+        nodes.append(
+            {
+                "id": node_id,
+                "label": f"{match['filename']} · {match.get('page_number') or 'document'}",
+                "type": "case_document",
+                "risk": "evidence",
+            }
+        )
+        edges.append(
+            {
+                "id": f"kg-d-{index}",
+                "source": node_id,
+                "target": "user-invention",
+                "label": "retrieved case evidence",
+            }
+        )
+        document_citations.append(evidence_citation(case.id, match))
     return {
         "nodes": nodes,
         "edges": edges,
         "findings": [
-            "No definitive prior-art clearance has been performed in this curated MVP corpus.",
+            "No definitive prior-art clearance has been performed in the currently available corpus.",
             "Search each ingredient, synonym, claimed use, process parameter and delivery feature in patent and non-patent literature.",
             "TKDL availability is restricted; route the final search through an authorized patent professional or examining authority.",
         ],
         "citations": [
             public_citation("india-tkdl"),
             public_citation("india-patents-act-1970"),
+            *document_citations,
         ],
     }
 
 
-def build_evidence(case: Any) -> dict[str, Any]:
+def build_evidence(case: Any, evidence_matches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     text = _text(case)
+    document_citations = [evidence_citation(case.id, match) for match in (evidence_matches or [])[:5]]
     modern = (
-        "Some study language appears in the case description; individual studies still require appraisal."
+        f"{len(document_citations)} relevant passage(s) were retrieved from case documents. They remain user-supplied and require critical appraisal."
+        if document_citations
+        else "Some study language appears in the case description; individual studies still require appraisal."
         if _contains(text, ["study", "trial", "clinical"])
         else "No claim-specific modern scientific studies have been supplied."
     )
@@ -303,16 +340,24 @@ def build_evidence(case: Any) -> dict[str, Any]:
             else "A classical text, monograph or documented customary-use source has not been linked.",
             "confidence": 0.68 if case.classical_formulation else 0.25,
         },
-        "modern_science": {"status": "limited", "summary": modern, "confidence": 0.30},
+        "modern_science": {
+            "status": "documents_retrieved_unappraised" if document_citations else "limited",
+            "summary": modern,
+            "confidence": 0.52 if document_citations else 0.30,
+        },
         "safety": {
             "status": "review_required",
             "summary": "Provide identity, purity, contaminants, interactions, contraindications, dose and adverse-event information.",
             "confidence": 0.22,
         },
         "confidence": {
-            "label": "Low pending document review",
-            "score": 0.31,
-            "basis": "No uploaded evidence has been critically appraised in this run.",
+            "label": "Moderate retrieval confidence; appraisal pending" if document_citations else "Low pending document review",
+            "score": 0.51 if document_citations else 0.31,
+            "basis": (
+                "Relevant case-document passages were retrieved with page/chunk lineage, but authenticity and study quality remain unverified."
+                if document_citations
+                else "No uploaded evidence has been critically appraised in this run."
+            ),
         },
         "gaps": [
             "Claim-specific efficacy evidence",
@@ -323,6 +368,7 @@ def build_evidence(case: Any) -> dict[str, Any]:
         "citations": [
             public_citation("us-fda-botanical-drug-guidance"),
             public_citation("eu-traditional-herbal-medicinal-products"),
+            *document_citations,
         ],
     }
 
@@ -496,8 +542,10 @@ def build_jurisdictions(case: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def build_challenges(case: Any) -> dict[str, list[dict[str, Any]]]:
-    return {
+def build_challenges(
+    case: Any, evidence_matches: list[dict[str, Any]] | None = None
+) -> dict[str, list[dict[str, Any]]]:
+    challenges = {
         "patent_examiner": [
             {
                 "severity": "high",
@@ -549,9 +597,34 @@ def build_challenges(case: Any) -> dict[str, list[dict[str, Any]]]:
             },
         ],
     }
+    official_support = {
+        "patent_examiner": ["india-patents-act-1970", "india-tkdl"],
+        "regulatory_reviewer": ["drugs-cosmetics-act-india", "fssai-ayurveda-aahara-2022"],
+        "abs_reviewer": ["india-biological-diversity-act-2002", "cbd-nagoya-protocol"],
+        "scientific_evidence_reviewer": [
+            "us-fda-botanical-drug-guidance",
+            "eu-traditional-herbal-medicinal-products",
+        ],
+    }
+    document_support = [evidence_citation(case.id, match) for match in (evidence_matches or [])[:2]]
+    for reviewer, findings in challenges.items():
+        citations = [public_citation(source_id) for source_id in official_support[reviewer]]
+        for finding in findings:
+            finding["citations"] = [*citations, *document_support]
+    return challenges
 
 
-def analyze_case(case: Any) -> dict[str, Any]:
+def analyze_case(
+    case: Any,
+    evidence_matches: list[dict[str, Any]] | None = None,
+    evidence_overview: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    evidence_matches = evidence_matches or []
+    evidence_overview = evidence_overview or {
+        "document_count": 0,
+        "indexed_document_count": 0,
+        "chunk_count": 0,
+    }
     classification = classify_product(case)
     result = {
         "case": {"id": case.id, "title": case.title, "status": "analyzed"},
@@ -559,12 +632,19 @@ def analyze_case(case: Any) -> dict[str, Any]:
         "classification": classification,
         "genome": build_genome(case),
         "risk_cards": build_risks(case),
-        "knowledge_graph": build_knowledge_graph(case),
-        "scientific_evidence": build_evidence(case),
+        "knowledge_graph": build_knowledge_graph(case, evidence_matches),
+        "scientific_evidence": build_evidence(case, evidence_matches),
         "ip_strategy": build_ip_strategy(case),
         "regulatory_abs": build_regulatory(case, classification),
         "jurisdictions": build_jurisdictions(case),
-        "challenges": build_challenges(case),
+        "challenges": build_challenges(case, evidence_matches),
+        "evidence_retrieval": {
+            **evidence_overview,
+            "retrieved_passage_count": len(evidence_matches),
+            "citations": [evidence_citation(case.id, match) for match in evidence_matches],
+            "method": "hybrid lexical and deterministic vector retrieval",
+            "appraisal_status": "human appraisal required",
+        },
         "next_actions": [
             "Freeze the quantitative formulation, intended use, dose, delivery and claims.",
             "Complete patent, non-patent and traditional-knowledge searches with a qualified professional.",
@@ -572,12 +652,16 @@ def analyze_case(case: Any) -> dict[str, Any]:
             "Build a claim-to-evidence matrix and quality/safety gap plan.",
         ],
         "confidence": {
-            "score": 0.58,
-            "label": "Moderate screening confidence",
-            "basis": "Curated primary-source registry with deterministic rules; no comprehensive database clearance or document appraisal.",
+            "score": 0.64 if evidence_matches else 0.58,
+            "label": "Moderate grounded screening confidence",
+            "basis": (
+                "Curated primary sources plus retrieved case-document passages; comprehensive clearance and human appraisal remain required."
+                if evidence_matches
+                else "Curated primary-source registry; no comprehensive database clearance or document appraisal."
+            ),
         },
         "corpus_version": settings.corpus_version,
-        "generated_by": "IP-SAKTI deterministic grounded screening engine",
+        "generated_by": "IP-SAKTI hybrid evidence retrieval and grounded screening engine",
         "warnings": [
             DISCLAIMER,
             "Legal and regulatory requirements can change; citations show the source date or status available in the registry.",
@@ -586,7 +670,9 @@ def analyze_case(case: Any) -> dict[str, Any]:
     return result
 
 
-def answer_question(case: Any, question: str) -> dict[str, Any]:
+def answer_question(
+    case: Any, question: str, evidence_matches: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     normalized = re.sub(r"[^a-z0-9\s-]", " ", question.lower())
     scored: list[tuple[int, dict[str, Any]]] = []
     tokens = {token for token in normalized.split() if len(token) > 2}
@@ -597,7 +683,8 @@ def answer_question(case: Any, question: str) -> dict[str, Any]:
             score += 2
         scored.append((score, source))
     matches = [source for score, source in sorted(scored, key=lambda item: item[0], reverse=True) if score > 0][:3]
-    if not matches:
+    evidence_matches = evidence_matches or []
+    if not matches and not evidence_matches:
         return {
             "answer": "The curated source registry does not contain enough directly relevant material to answer this reliably. Add the relevant document or request expert review rather than treating a generated response as authority.",
             "claim_type": "unsupported",
@@ -609,17 +696,26 @@ def answer_question(case: Any, question: str) -> dict[str, Any]:
                 "Safe abstention: no sufficiently relevant primary source was retrieved.",
             ],
         }
-    summaries = " ".join(source["summary"] for source in matches)
-    answer = f"For {case.title}: {summaries} This is a source-grounded screening interpretation, not a final legal conclusion."
+    official_summary = " ".join(source["summary"] for source in matches)
+    evidence_summary = " ".join(
+        "The supplied document "
+        f"{match['filename']} states: {' '.join(match['content'].split())[:360]}"
+        for match in evidence_matches[:3]
+    )
+    combined = " ".join(value for value in [official_summary, evidence_summary] if value)
+    answer = f"For {case.title}: {combined} This is a source-grounded screening interpretation, not a final legal conclusion."
     limitations = [
         DISCLAIMER,
-        "The answer covers only the cited registry sources, not a comprehensive search.",
+        "The answer covers only the retrieved official and case-document sources, not a comprehensive search or authenticity appraisal.",
     ]
     return {
         "answer": answer,
         "claim_type": "interpretation",
-        "confidence": min(0.82, 0.54 + 0.08 * len(matches)),
-        "citations": [public_citation(source["id"]) for source in matches],
+        "confidence": min(0.82, 0.50 + 0.06 * len(matches) + 0.04 * len(evidence_matches)),
+        "citations": [
+            *[public_citation(source["id"]) for source in matches],
+            *[evidence_citation(case.id, match) for match in evidence_matches[:3]],
+        ],
         "requires_human_review": True,
         "limitations": limitations,
     }

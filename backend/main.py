@@ -1,4 +1,7 @@
+import hashlib
+import json
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -21,6 +24,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 import models
 from config import settings
@@ -46,12 +50,21 @@ from security import (
     hash_password,
     verify_password,
 )
+from services.evidence import (
+    EvidenceExtractionError,
+    document_status,
+    evidence_overview,
+    index_document,
+    retrieve_case_evidence,
+)
 from services.intelligence import (
     DISCLAIMER,
     analyze_case,
     answer_question,
     list_sources,
 )
+from services.rate_limit import InMemoryRateLimitMiddleware
+from services.reporting import build_pdf_report
 from services.storage_service import save_upload
 from services.translation import normalize_language, translate_text
 
@@ -66,10 +79,14 @@ def validate_runtime() -> None:
             raise RuntimeError("A strong IPSAKTI_SECRET_KEY is required in production.")
         if settings.demo_mode:
             raise RuntimeError("IPSAKTI_DEMO_MODE must be false in production.")
+        if settings.registration_enabled:
+            raise RuntimeError("IPSAKTI_REGISTRATION_ENABLED must be false in production; use an approved identity flow.")
+        if not settings.malware_scan_enabled:
+            raise RuntimeError("IPSAKTI_MALWARE_SCAN_ENABLED must be true in production.")
+        if settings.translation_enabled and not settings.translation_service_token:
+            raise RuntimeError("IPSAKTI_TRANSLATION_SERVICE_TOKEN is required when translation is enabled in production.")
         if settings.database_url.startswith("sqlite"):
-            logger.warning(
-                "SQLite is intended for a single-instance deployment; use PostgreSQL for horizontal scaling."
-            )
+            raise RuntimeError("PostgreSQL is required in production.")
 
 
 def bootstrap_admin() -> None:
@@ -87,6 +104,60 @@ def bootstrap_admin() -> None:
                 role="admin",
             )
         )
+        db.commit()
+
+
+def seed_demo_cases(db: Session, user: models.User) -> None:
+    samples = [
+        {
+            "title": "Controlled-release Ashwagandha Platform",
+            "description": "A standardized Withania somnifera root extract delivered through a controlled-release capsule with batch-specific withanolide controls for daily stress-management support.",
+            "ingredients": ["Withania somnifera root extract", "plant-based controlled-release capsule"],
+            "product_form": "Controlled-release capsule",
+            "intended_use": "Daily stress-management support without a disease-treatment claim",
+            "target_markets": ["India", "European Union", "United States"],
+            "classical_formulation": False,
+            "biological_sourcing": "Cultivated Withania sourced from Rajasthan through a documented Indian supplier",
+            "metadata_json": {"manufacturing_process": "Standardized extraction and controlled-release coating", "brand": "SattvaRelease"},
+        },
+        {
+            "title": "Neem Wound-care Hydrogel",
+            "description": "A neem-derived topical hydrogel with a specified extraction fraction, polymer network and antimicrobial wound-care claim intended for regulated clinical development.",
+            "ingredients": ["Azadirachta indica leaf fraction", "medical-grade hydrogel polymer"],
+            "product_form": "Topical hydrogel",
+            "intended_use": "Adjunct wound-care treatment",
+            "target_markets": ["India", "European Union"],
+            "classical_formulation": False,
+            "biological_sourcing": "Cultivated neem leaves from Karnataka with supplier and harvest records",
+            "metadata_json": {"manufacturing_process": "Solvent-controlled fractionation and sterile gel filling", "brand": "NimbaGel"},
+        },
+        {
+            "title": "Classical-inspired Ayurveda Aahara Infusion",
+            "description": "A consumer herbal infusion inspired by documented Ayurvedic ingredients, formulated as an Ayurveda Aahara product with non-therapeutic wellbeing claims.",
+            "ingredients": ["Ocimum tenuiflorum leaf", "Zingiber officinale rhizome", "Cinnamomum verum bark"],
+            "product_form": "Herbal infusion sachet",
+            "intended_use": "General wellbeing beverage",
+            "target_markets": ["India"],
+            "classical_formulation": True,
+            "biological_sourcing": "Domestic cultivated resources sourced through three Indian suppliers",
+            "metadata_json": {"manufacturing_process": "Low-temperature drying, milling and fixed-ratio blending", "brand": "Prana Infusion"},
+        },
+    ]
+    existing_titles = set(
+        db.scalars(select(models.InnovationCase.title).where(models.InnovationCase.owner_id == user.id))
+    )
+    created = 0
+    for payload in samples:
+        if payload["title"] in existing_titles:
+            continue
+        case = models.InnovationCase(owner_id=user.id, status="analyzed", **payload)
+        db.add(case)
+        db.flush()
+        result = analyze_case(case)
+        db.add(models.AnalysisRun(case_id=case.id, corpus_version=settings.corpus_version, result=result))
+        created += 1
+    if created:
+        audit(db, user.id, "demo.portfolio_seeded", "user", user.id, {"case_count": created})
         db.commit()
 
 
@@ -113,18 +184,37 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.hosts)
+app.add_middleware(
+    InMemoryRateLimitMiddleware,
+    requests=settings.rate_limit_requests,
+    window_seconds=settings.rate_limit_window_seconds,
+)
 
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))[:80]
+    started = time.perf_counter()
     response = await call_next(request)
+    duration_ms = (time.perf_counter() - started) * 1000
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["X-Frame-Options"] = "DENY"
     if settings.production:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Server-Timing"] = f"app;dur={duration_ms:.1f}"
+    logger.info(
+        "request method=%s path=%s status=%s duration_ms=%.1f request_id=%s",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+        request_id,
+    )
     return response
 
 
@@ -137,6 +227,11 @@ async def unhandled_error(request: Request, exc: Exception):
 Db = Annotated[Session, Depends(get_db)]
 
 
+def audit_timestamp(value: datetime) -> str:
+    normalized = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    return normalized.isoformat()
+
+
 def audit(
     db: Session,
     user_id: int | None,
@@ -145,13 +240,42 @@ def audit(
     entity_id: int | str | None,
     details: dict | None = None,
 ) -> None:
+    created_at = datetime.now(UTC)
+    previous = db.scalar(select(models.AuditLog).order_by(desc(models.AuditLog.id)).limit(1))
+    previous_hash = ""
+    if previous and isinstance(previous.details, dict):
+        previous_hash = previous.details.get("_integrity", {}).get("entry_hash", "")
+    public_details = details or {}
+    canonical = json.dumps(
+        {
+            "previous_hash": previous_hash,
+            "user_id": user_id,
+            "action": action,
+            "entity_type": entity_type,
+            "entity_id": str(entity_id) if entity_id is not None else None,
+            "details": public_details,
+            "created_at": audit_timestamp(created_at),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    entry_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     db.add(
         models.AuditLog(
             user_id=user_id,
             action=action,
             entity_type=entity_type,
             entity_id=str(entity_id) if entity_id is not None else None,
-            details=details or {},
+            details={
+                **public_details,
+                "_integrity": {
+                    "algorithm": "sha256-chain-v1",
+                    "previous_hash": previous_hash,
+                    "entry_hash": entry_hash,
+                },
+            },
+            created_at=created_at,
         )
     )
 
@@ -229,6 +353,8 @@ def readiness(db: Db):
     tags=["auth"],
 )
 def register(payload: RegisterRequest, db: Db):
+    if not settings.registration_enabled:
+        raise HTTPException(status_code=404, detail="Self-registration is disabled")
     email = payload.email.lower()
     if db.scalar(select(models.User).where(models.User.email == email)):
         raise HTTPException(status_code=409, detail="An account with this email already exists")
@@ -278,6 +404,7 @@ def demo_login(db: Db):
         db.add(user)
         db.commit()
         db.refresh(user)
+    seed_demo_cases(db, user)
     return TokenResponse(
         access_token=create_access_token(user.id, user.role),
         user=UserResponse.model_validate(user),
@@ -348,9 +475,12 @@ def update_case(case_id: int, payload: CaseUpdate, db: Db, user: CurrentUser):
 @app.delete(f"{settings.api_prefix}/cases/{{case_id}}", status_code=204, tags=["cases"])
 def delete_case(case_id: int, db: Db, user: CurrentUser):
     case = require_case(db, case_id, user)
+    stored_files = [settings.upload_dir / document.stored_name for document in case.documents]
     audit(db, user.id, "case.deleted", "case", case.id, {"title": case.title})
     db.delete(case)
     db.commit()
+    for path in stored_files:
+        path.unlink(missing_ok=True)
     return Response(status_code=204)
 
 
@@ -361,7 +491,19 @@ def delete_case(case_id: int, db: Db, user: CurrentUser):
 )
 def run_analysis(case_id: int, db: Db, user: CurrentUser):
     case = require_case(db, case_id, user)
-    result = analyze_case(case)
+    query = " ".join(
+        value
+        for value in [
+            case.title,
+            case.description,
+            case.intended_use,
+            case.biological_sourcing,
+            " ".join(case.ingredients or []),
+        ]
+        if value
+    )
+    evidence_matches = retrieve_case_evidence(db, case.id, query, limit=8, minimum_score=0.03)
+    result = analyze_case(case, evidence_matches, evidence_overview(db, case.id))
     run = models.AnalysisRun(case_id=case.id, corpus_version=settings.corpus_version, result=result)
     case.status = "analyzed"
     db.add(run)
@@ -432,7 +574,8 @@ async def ask(case_id: int, payload: AskRequest, db: Db, user: CurrentUser):
             ],
         }
     else:
-        result = answer_question(case, input_translation.text)
+        evidence_matches = retrieve_case_evidence(db, case.id, input_translation.text, limit=5)
+        result = answer_question(case, input_translation.text, evidence_matches)
 
     authoritative_answer = result["answer"]
     output_translation = await translate_text(authoritative_answer, "English", response_language)
@@ -509,13 +652,24 @@ async def upload_document(case_id: int, db: Db, user: CurrentUser, file: Annotat
     document = models.UploadedDocument(case_id=case.id, **stored)
     db.add(document)
     db.flush()
+    try:
+        ingestion = index_document(db, document)
+    except EvidenceExtractionError as exc:
+        db.rollback()
+        (settings.upload_dir / str(stored["stored_name"])).unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        (settings.upload_dir / str(stored["stored_name"])).unlink(missing_ok=True)
+        logger.exception("Evidence ingestion failed case_id=%s filename=%s", case.id, stored["filename"])
+        raise HTTPException(status_code=422, detail="The document could not be safely extracted and indexed.") from None
     audit(
         db,
         user.id,
         "document.uploaded",
         "document",
         document.id,
-        {"case_id": case.id, "sha256": document.sha256},
+        {"case_id": case.id, "sha256": document.sha256, **ingestion},
     )
     db.commit()
     db.refresh(document)
@@ -523,6 +677,7 @@ async def upload_document(case_id: int, db: Db, user: CurrentUser, file: Annotat
         "id": document.id,
         "case_id": case.id,
         **stored,
+        **ingestion,
         "created_at": document.created_at,
     }
 
@@ -543,9 +698,57 @@ def get_documents(case_id: int, db: Db, user: CurrentUser):
             "size_bytes": item.size_bytes,
             "sha256": item.sha256,
             "created_at": item.created_at,
+            **document_status(db, item),
         }
         for item in documents
     ]
+
+
+@app.get(f"{settings.api_prefix}/cases/{{case_id}}/documents/{{document_id}}/content", tags=["evidence"])
+def document_content(case_id: int, document_id: int, db: Db, user: CurrentUser):
+    require_case(db, case_id, user)
+    document = db.get(models.UploadedDocument, document_id)
+    if not document or document.case_id != case_id:
+        raise HTTPException(status_code=404, detail="Document not found")
+    path = settings.upload_dir / document.stored_name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Document content is unavailable")
+    audit(db, user.id, "document.viewed", "document", document.id, {"case_id": case_id})
+    db.commit()
+    return Response(
+        path.read_bytes(),
+        media_type=document.media_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{document.filename}"',
+            "Cache-Control": "private, no-store",
+            "X-Content-SHA256": document.sha256,
+        },
+    )
+
+
+@app.delete(
+    f"{settings.api_prefix}/cases/{{case_id}}/documents/{{document_id}}",
+    status_code=204,
+    tags=["evidence"],
+)
+def delete_document(case_id: int, document_id: int, db: Db, user: CurrentUser):
+    require_case(db, case_id, user)
+    document = db.get(models.UploadedDocument, document_id)
+    if not document or document.case_id != case_id:
+        raise HTTPException(status_code=404, detail="Document not found")
+    path = settings.upload_dir / document.stored_name
+    audit(
+        db,
+        user.id,
+        "document.deleted",
+        "document",
+        document.id,
+        {"case_id": case_id, "sha256": document.sha256},
+    )
+    db.delete(document)
+    db.commit()
+    path.unlink(missing_ok=True)
+    return Response(status_code=204)
 
 
 @app.post(
@@ -579,6 +782,7 @@ def report(
     db: Db,
     user: CurrentUser,
     accept: Annotated[str | None, Header()] = None,
+    format: str | None = Query(default=None, pattern="^(json|markdown|pdf)$"),
 ):
     case = require_case(db, case_id, user)
     run = latest_analysis(db, case_id)
@@ -591,7 +795,17 @@ def report(
         "generated_at": datetime.now(UTC).isoformat(),
         "disclaimer": DISCLAIMER,
     }
-    if accept and "text/markdown" in accept:
+    if format == "pdf" or (accept and "application/pdf" in accept):
+        content = build_pdf_report(case, run, DISCLAIMER)
+        return Response(
+            content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="ip-sakti-case-{case.id}.pdf"',
+                "Cache-Control": "private, no-store",
+            },
+        )
+    if format == "markdown" or (accept and "text/markdown" in accept):
         markdown = (
             f"# {report_data['report_title']}\n\n{run.result['executive_summary']}\n\n## Next actions\n\n"
             + "\n".join(f"- {item}" for item in run.result["next_actions"])
@@ -614,3 +828,49 @@ def audit_log(db: Db, user: CurrentUser, limit: int = Query(default=100, ge=1, l
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Administrator role required")
     return list(db.scalars(select(models.AuditLog).order_by(desc(models.AuditLog.created_at)).limit(limit)))
+
+
+@app.get(f"{settings.api_prefix}/cases/{{case_id}}/audit", response_model=list[AuditResponse], tags=["audit"])
+def case_audit(case_id: int, db: Db, user: CurrentUser):
+    require_case(db, case_id, user)
+    return list(
+        db.scalars(
+            select(models.AuditLog)
+            .where(models.AuditLog.entity_id == str(case_id))
+            .order_by(models.AuditLog.created_at)
+        )
+    )
+
+
+@app.get(f"{settings.api_prefix}/admin/audit/integrity", tags=["admin"])
+def audit_integrity(db: Db, user: CurrentUser):
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Administrator role required")
+    rows = list(db.scalars(select(models.AuditLog).order_by(models.AuditLog.id)))
+    previous_hash = ""
+    verified = 0
+    for row in rows:
+        integrity = row.details.get("_integrity", {}) if isinstance(row.details, dict) else {}
+        if not integrity:
+            continue
+        details = {key: value for key, value in row.details.items() if key != "_integrity"}
+        canonical = json.dumps(
+            {
+                "previous_hash": previous_hash,
+                "user_id": row.user_id,
+                "action": row.action,
+                "entity_type": row.entity_type,
+                "entity_id": row.entity_id,
+                "details": details,
+                "created_at": audit_timestamp(row.created_at),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+        expected = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        if integrity.get("previous_hash") != previous_hash or integrity.get("entry_hash") != expected:
+            return {"status": "failed", "failed_at": row.id, "verified_entries": verified}
+        previous_hash = expected
+        verified += 1
+    return {"status": "verified", "verified_entries": verified, "head_hash": previous_hash}

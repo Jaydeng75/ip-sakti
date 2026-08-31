@@ -30,6 +30,10 @@ export type Citation = {
   url: string;
   support_status: string;
   excerpt: string;
+  locator?: string | null;
+  source_type?: "official" | "case_document";
+  content_sha256?: string | null;
+  retrieval_score?: number | null;
 };
 
 export type RiskCard = {
@@ -38,6 +42,8 @@ export type RiskCard = {
   score: number;
   level: string;
   summary: string;
+  claim_type?: "inference";
+  citations?: Citation[];
 };
 
 export type AnalysisResult = {
@@ -125,6 +131,7 @@ export type AnalysisResult = {
       objection: string;
       missing: string;
       next_step: string;
+      citations?: Citation[];
     }>
   >;
   next_actions: string[];
@@ -132,6 +139,15 @@ export type AnalysisResult = {
   corpus_version: string;
   generated_by: string;
   warnings: string[];
+  evidence_retrieval: {
+    document_count: number;
+    indexed_document_count: number;
+    chunk_count: number;
+    retrieved_passage_count: number;
+    citations: Citation[];
+    method: string;
+    appraisal_status: string;
+  };
 };
 
 type EvidenceSection = {
@@ -184,6 +200,9 @@ function deviceCredentials() {
 }
 
 async function issueLocalSession() {
+  if (process.env.NEXT_PUBLIC_DEMO_AUTH !== "true") {
+    throw new Error("Sign in with an approved IP-SAKTI account to continue.");
+  }
   const demo = await fetch(`${API_BASE_URL}/auth/demo`, { method: "POST" });
   if (demo.ok) return demo.json() as Promise<{ access_token: string }>;
 
@@ -221,6 +240,25 @@ async function token() {
   return session.access_token;
 }
 
+export async function login(email: string, password: string) {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
+    throw new Error(payload?.detail ?? "Sign-in failed.");
+  }
+  const session = (await response.json()) as { access_token: string; user: { display_name: string } };
+  window.localStorage.setItem(TOKEN_KEY, session.access_token);
+  return session;
+}
+
+export function logout() {
+  window.localStorage.removeItem(TOKEN_KEY);
+}
+
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const accessToken = await token();
   const headers = new Headers(init.headers);
@@ -240,6 +278,28 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+async function authenticatedBlob(url: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${await token()}`);
+  const response = await fetch(url, { ...init, headers });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
+    throw new Error(payload?.detail ?? `Download failed (${response.status}).`);
+  }
+  return response.blob();
+}
+
+export async function openCitation(citation: Citation) {
+  if (citation.source_type !== "case_document") {
+    window.open(citation.url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const blob = await authenticatedBlob(citation.url);
+  const objectUrl = URL.createObjectURL(blob);
+  window.open(objectUrl, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 export const caseApi = {
@@ -263,14 +323,20 @@ export const caseApi = {
       generated_at: string;
       disclaimer: string;
     }>(`/cases/${caseId}/report`),
+  reportPdf: (caseId: number) =>
+    authenticatedBlob(`${API_BASE_URL}/cases/${caseId}/report?format=pdf`),
   uploadDocument: (caseId: number, file: File) => {
     const body = new FormData();
     body.append("file", file);
-    return apiRequest<{ id: number; filename: string; sha256: string }>(
+    return apiRequest<{ id: number; filename: string; sha256: string; status: string; page_count: number; chunk_count: number }>(
       `/cases/${caseId}/documents`,
       { method: "POST", body },
     );
   },
+  documents: (caseId: number) =>
+    apiRequest<Array<{ id: number; filename: string; sha256: string; status: string; page_count: number; chunk_count: number; size_bytes: number }>>(`/cases/${caseId}/documents`),
+  deleteDocument: (caseId: number, documentId: number) =>
+    apiRequest<void>(`/cases/${caseId}/documents/${documentId}`, { method: "DELETE" }),
   requestExpertReview: (caseId: number, reviewType: string, notes?: string) =>
     apiRequest<{ id: number; status: string }>(`/cases/${caseId}/expert-review`, {
       method: "POST",

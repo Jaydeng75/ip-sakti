@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -89,6 +89,31 @@ class UploadedDocument(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     case: Mapped[InnovationCase] = relationship(back_populates="documents")
+    chunks: Mapped[list["EvidenceChunk"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+
+
+class EvidenceChunk(Base):
+    __tablename__ = "evidence_chunks"
+    __table_args__ = (UniqueConstraint("document_id", "chunk_index", name="uq_document_chunk"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("uploaded_documents.id", ondelete="CASCADE"), index=True
+    )
+    case_id: Mapped[int] = mapped_column(
+        ForeignKey("innovation_cases.id", ondelete="CASCADE"), index=True
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer)
+    page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    section: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    content: Mapped[str] = mapped_column(Text)
+    token_count: Mapped[int] = mapped_column(Integer)
+    embedding: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    document: Mapped[UploadedDocument] = relationship(back_populates="chunks")
 
 
 class ExpertReviewRequest(Base):

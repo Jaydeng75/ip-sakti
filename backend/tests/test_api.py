@@ -122,3 +122,54 @@ def test_upload_rejects_unsupported_type():
             headers=headers,
         )
         assert response.status_code == 415
+
+
+def test_uploaded_evidence_is_indexed_retrieved_cited_and_exported():
+    with TestClient(app) as client:
+        headers = auth_headers(client, "rag")
+        case_id = client.post("/api/v1/cases", json=sample_case(), headers=headers).json()["id"]
+        evidence_text = (
+            "Controlled-release botanical study\n\n"
+            "The ZYTHORA-47 assay compared the standardized extract with a non-standardized comparator. "
+            "The supplied material reports batch identity testing and a twelve-week stability observation. "
+            "This user-supplied statement has not been independently appraised."
+        )
+        uploaded = client.post(
+            f"/api/v1/cases/{case_id}/documents",
+            files={"file": ("study-notes.txt", evidence_text.encode(), "text/plain")},
+            headers=headers,
+        )
+        assert uploaded.status_code == 201, uploaded.text
+        document = uploaded.json()
+        assert document["status"] == "indexed"
+        assert document["chunk_count"] >= 1
+
+        analyzed = client.post(f"/api/v1/cases/{case_id}/analyze", headers=headers)
+        assert analyzed.status_code == 200, analyzed.text
+        retrieval = analyzed.json()["result"]["evidence_retrieval"]
+        assert retrieval["indexed_document_count"] == 1
+        assert retrieval["chunk_count"] >= 1
+
+        answer = client.post(
+            f"/api/v1/cases/{case_id}/ask",
+            json={"question": "What does the ZYTHORA-47 assay say about batch identity?"},
+            headers=headers,
+        )
+        assert answer.status_code == 200, answer.text
+        case_sources = [item for item in answer.json()["citations"] if item["source_type"] == "case_document"]
+        assert case_sources
+        assert case_sources[0]["locator"]
+        assert case_sources[0]["content_sha256"] == document["sha256"]
+
+        content = client.get(
+            f"/api/v1/cases/{case_id}/documents/{document['id']}/content",
+            headers=headers,
+        )
+        assert content.status_code == 200
+        assert content.content == evidence_text.encode()
+
+        pdf = client.get(f"/api/v1/cases/{case_id}/report?format=pdf", headers=headers)
+        assert pdf.status_code == 200, pdf.text
+        assert pdf.headers["content-type"].startswith("application/pdf")
+        assert pdf.content.startswith(b"%PDF")
+        assert len(pdf.content) > 2_000

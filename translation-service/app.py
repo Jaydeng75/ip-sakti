@@ -1,11 +1,13 @@
 import gc
+import hmac
 import logging
 import re
 import threading
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -48,13 +50,15 @@ class Settings(BaseSettings):
     hf_token: str | None = None
     en_indic_model: str = "ai4bharat/indictrans2-en-indic-dist-200M"
     indic_en_model: str = "ai4bharat/indictrans2-indic-en-dist-200M"
-    en_indic_revision: str = "main"
-    indic_en_revision: str = "main"
-    max_loaded_models: int = Field(default=1, ge=1, le=2)
+    en_indic_revision: str = "173b94239f7c38886b2747b8d4a5db771a7e1232"
+    indic_en_revision: str = "eb9e49d81077cfc5311e82ff36d8c1fc11557b5d"
+    max_loaded_models: int = Field(default=2, ge=1, le=2)
+    preload_models: bool = False
     max_chunk_characters: int = Field(default=700, ge=100, le=2_000)
     max_source_tokens: int = Field(default=256, ge=64, le=1_024)
     max_output_tokens: int = Field(default=256, ge=64, le=1_024)
     generation_beams: int = Field(default=1, ge=1, le=5)
+    service_token: str | None = None
 
     model_config = SettingsConfigDict(env_prefix="INDICTRANS_", extra="ignore")
 
@@ -222,9 +226,28 @@ class ModelManager:
             offset += len(group)
         return rebuilt, model_id
 
+    def preload(self) -> None:
+        with self._lock:
+            self._load(ENGLISH, "hin_Deva")
+            self._load("hin_Deva", ENGLISH)
+
+    @property
+    def loaded_model_count(self) -> int:
+        return len(self._models)
+
 
 manager = ModelManager()
-app = FastAPI(title="IP-SAKTI IndicTrans2 Service", version="1.0.0")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if settings.preload_models:
+        logger.info("Preloading both IndicTrans2 directions for predictable first-request latency")
+        manager.preload()
+    yield
+
+
+app = FastAPI(title="IP-SAKTI IndicTrans2 Service", version="1.1.0", lifespan=lifespan)
 
 
 @app.get("/health/live")
@@ -233,11 +256,12 @@ def live() -> dict[str, str]:
 
 
 @app.get("/health/ready")
-def ready() -> dict[str, str | bool]:
+def ready() -> dict[str, str | bool | int]:
     return {
         "status": "ready-for-model-load",
         "hf_token_configured": bool(settings.hf_token),
-        "note": "Model access is verified on the first translation request.",
+        "loaded_model_count": manager.loaded_model_count,
+        "note": "Models are preloaded when INDICTRANS_PRELOAD_MODELS is enabled; otherwise access is verified on first use.",
     }
 
 
@@ -247,7 +271,9 @@ def languages() -> dict[str, list[str]]:
 
 
 @app.post("/translate", response_model=TranslationResponse)
-def translate(payload: TranslationRequest) -> TranslationResponse:
+def translate(payload: TranslationRequest, x_service_token: str = Header(default="")) -> TranslationResponse:
+    if settings.service_token and not hmac.compare_digest(x_service_token, settings.service_token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Service authentication required.")
     if any(len(text) > 12_000 for text in payload.texts):
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Each text is limited to 12,000 characters.")
     try:

@@ -14,15 +14,26 @@ class Settings(BaseSettings):
     access_token_minutes: int = 60
     database_url: str = f"sqlite:///{BASE_DIR / 'data' / 'ip_sakti.db'}"
     allowed_origins: str = "http://localhost:3000"
+    public_api_url: str = "http://localhost:8000"
     upload_dir: Path = BASE_DIR / "data" / "uploads"
     max_upload_bytes: int = 10 * 1024 * 1024
+    ocr_enabled: bool = True
+    malware_scan_enabled: bool = False
+    clamav_host: str = "clamav"
+    clamav_port: int = 3310
+    clamav_timeout_seconds: float = 15.0
     demo_mode: bool = False
+    registration_enabled: bool = True
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
-    corpus_version: str = "2026-08-31.curated-mvp.1"
+    corpus_version: str = "2026-08-31.official-registry.2"
     translation_enabled: bool = False
     translation_url: str = "http://localhost:8100"
+    translation_service_token: str | None = None
     translation_timeout_seconds: float = 120.0
+    rate_limit_requests: int = 120
+    rate_limit_window_seconds: int = 60
+    trusted_hosts: str = "localhost,127.0.0.1,testserver"
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
@@ -37,6 +48,10 @@ class Settings(BaseSettings):
     @property
     def production(self) -> bool:
         return self.environment.lower() == "production"
+
+    @property
+    def hosts(self) -> list[str]:
+        return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
 
 
 settings = Settings()

@@ -7,8 +7,11 @@ argon2-cffi>=25.1,<26.0
 python-multipart>=0.0.20,<1.0
 email-validator>=2.2,<3.0
 psycopg[binary]>=3.2,<4.0
+pypdf>=5.9,<6.0
+pymupdf>=1.26,<2.0
+pytesseract>=0.3.13,<1.0
+python-docx>=1.2,<2.0
+reportlab>=4.4,<5.0
+alembic>=1.16,<2.0
 
-# Test and quality tooling
 httpx>=0.28,<1.0
-pytest>=8.4,<9.0
-ruff>=0.12,<1.0
