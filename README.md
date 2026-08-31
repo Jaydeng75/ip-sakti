@@ -11,6 +11,7 @@ Source-grounded innovation intelligence for Ayurvedic and biological-resource pr
 - Deterministic grounded screening engine with explicit confidence, source status, jurisdiction, effective date, limitations and safe abstention.
 - Product classification, innovation genome, TK/prior-art graph, evidence separation, multi-route IP strategy, six-step regulatory/ABS flow and India/EU/US/international comparison.
 - Split-screen Ask IP-SAKTI experience with clickable official citations and claim-type labels.
+- IndicTrans2 multilingual input/output for all 22 scheduled Indian languages, with explicit machine-translation provenance and the authoritative English answer retained.
 - Evidence uploads restricted to PDF/TXT/DOCX, size checked, PDF signature checked and stored with SHA-256 integrity metadata.
 - Human expert-review requests and structured case-report exports.
 - SQLite for simple local development and PostgreSQL in the supplied Compose stack.
@@ -21,6 +22,7 @@ Source-grounded innovation intelligence for Ayurvedic and biological-resource pr
 ```text
 backend/                 FastAPI application, curated source registry and tests
 frontend/                Next.js web application
+translation-service/     Isolated AI4Bharat IndicTrans2 inference service
 docker-compose.yml       Local integrated PostgreSQL + API + web stack
 ```
 
@@ -34,13 +36,15 @@ The duplicate `backend 2` prototype, committed bytecode, local databases, vector
    cp .env.example .env
    ```
 
-2. Start PostgreSQL, API and web application.
+2. Request access to both gated AI4Bharat models on Hugging Face: [English → Indic](https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M) and [Indic → English](https://huggingface.co/ai4bharat/indictrans2-indic-en-dist-200M). Create a read-only Hugging Face token and set `HF_TOKEN` in `.env`.
+
+3. Start PostgreSQL, IndicTrans2, API and web application.
 
    ```bash
    docker compose up --build
    ```
 
-3. Open [http://localhost:3000](http://localhost:3000). API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs) in development.
+4. Open [http://localhost:3000](http://localhost:3000). API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs) in development. The first multilingual request downloads the selected models and can take several minutes; the model cache is persisted in a Docker volume.
 
 The Compose configuration enables demo authentication for local evaluation only. Production startup rejects demo mode and a default/short signing key.
 
@@ -66,6 +70,19 @@ cp .env.example .env.local
 npm run dev
 ```
 
+IndicTrans2, when running without Docker:
+
+```bash
+cd translation-service
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+export INDICTRANS_HF_TOKEN=hf_your_read_token
+uvicorn app:app --host 0.0.0.0 --port 8100
+```
+
+Then set `IPSAKTI_TRANSLATION_ENABLED=true` in `backend/.env`. IndicTrans2 checkpoints are substantial; CPU inference is suitable for evaluation, while a dedicated accelerator-backed service is recommended for production traffic. For a controlled deployment, replace both `main` revision values with reviewed Hugging Face commit hashes.
+
 ## Verification
 
 ```bash
@@ -76,6 +93,9 @@ pytest -q
 cd ../frontend
 npm run lint
 npm run build
+
+cd ../translation-service
+pytest -q
 ```
 
 ## API overview
@@ -102,7 +122,7 @@ Traditional use is kept explicitly separate from clinically established efficacy
 - Use object storage with malware scanning and retention policies for uploaded evidence.
 - Add managed database backups, schema migration automation, log redaction, monitoring and alerting.
 - Replace/extend the curated registry with licensed patent, TKDL-authorized, legal and scientific corpora; add document-level ingestion, chunk lineage and retrieval evaluation.
-- Configure an approved Bhashini/translation provider and validate legal terminology with bilingual experts before enabling non-English authoritative output.
+- Run IndicTrans2 behind an authenticated private service, pin reviewed model revisions, monitor latency/memory and validate legal terminology with bilingual experts. Translations must remain labelled as machine-generated rather than authoritative legal text.
 - Have qualified patent, regulatory, ABS and scientific experts approve the corpus, rules and disclaimers before real decisions or filings.
 
 This repository is a production-oriented engineering baseline and decision-support prototype. It is not, by itself, a legally complete production service or professional advice.

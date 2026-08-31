@@ -21,13 +21,38 @@ services:
       IPSAKTI_DATABASE_URL: postgresql+psycopg://ipsakti:${POSTGRES_PASSWORD:-local-dev-only-change-me}@db:5432/ipsakti
       IPSAKTI_ALLOWED_ORIGINS: http://localhost:3000
       IPSAKTI_DEMO_MODE: "true"
+      IPSAKTI_TRANSLATION_ENABLED: "true"
+      IPSAKTI_TRANSLATION_URL: http://translation:8100
+      IPSAKTI_TRANSLATION_TIMEOUT_SECONDS: "180"
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+      translation:
+        condition: service_healthy
     volumes:
       - evidence_uploads:/app/data/uploads
+
+  translation:
+    build: ./translation-service
+    environment:
+      INDICTRANS_HF_TOKEN: ${HF_TOKEN:-}
+      INDICTRANS_EN_INDIC_MODEL: ai4bharat/indictrans2-en-indic-dist-200M
+      INDICTRANS_INDIC_EN_MODEL: ai4bharat/indictrans2-indic-en-dist-200M
+      INDICTRANS_EN_INDIC_REVISION: ${INDICTRANS_EN_INDIC_REVISION:-main}
+      INDICTRANS_INDIC_EN_REVISION: ${INDICTRANS_INDIC_EN_REVISION:-main}
+      INDICTRANS_MAX_LOADED_MODELS: "1"
+    ports:
+      - "8100:8100"
+    volumes:
+      - indictrans_models:/models/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health/live', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   frontend:
     build:
@@ -42,3 +67,4 @@ services:
 volumes:
   postgres_data:
   evidence_uploads:
+  indictrans_models:

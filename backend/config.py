@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
     corpus_version: str = "2026-08-31.curated-mvp.1"
+    translation_enabled: bool = False
+    translation_url: str = "http://localhost:8100"
+    translation_timeout_seconds: float = 120.0
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

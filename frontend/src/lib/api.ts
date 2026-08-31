@@ -150,11 +150,25 @@ export type AnalysisResponse = {
 
 export type AskResponse = {
   answer: string;
+  authoritative_answer: string;
+  input_language: string;
+  response_language: string;
+  input_translation: TranslationInfo;
+  output_translation: TranslationInfo;
   claim_type: "legal_fact" | "interpretation" | "inference" | "unsupported";
   confidence: number;
   citations: Citation[];
   requires_human_review: boolean;
   limitations: string[];
+};
+
+export type TranslationInfo = {
+  provider: "IndicTrans2" | "none";
+  status: "identity" | "translated" | "disabled" | "unavailable";
+  source_language: string;
+  target_language: string;
+  model: string | null;
+  machine_translated: boolean;
 };
 
 function deviceCredentials() {
@@ -236,10 +250,10 @@ export const caseApi = {
     apiRequest<AnalysisResponse>(`/cases/${caseId}/analyze`, { method: "POST" }),
   latestAnalysis: (caseId: number) =>
     apiRequest<AnalysisResponse>(`/cases/${caseId}/analysis/latest`),
-  ask: (caseId: number, question: string, language = "English") =>
+  ask: (caseId: number, question: string, inputLanguage = "English", responseLanguage = "English") =>
     apiRequest<AskResponse>(`/cases/${caseId}/ask`, {
       method: "POST",
-      body: JSON.stringify({ question, language }),
+      body: JSON.stringify({ question, input_language: inputLanguage, language: responseLanguage }),
     }),
   report: (caseId: number) =>
     apiRequest<{

@@ -78,6 +78,7 @@ class AnalysisResponse(BaseModel):
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=4_000)
+    input_language: str = Field(default="English", max_length=40)
     language: str = Field(default="English", max_length=40)
 
 
@@ -92,8 +93,22 @@ class Citation(BaseModel):
     excerpt: str
 
 
+class TranslationInfo(BaseModel):
+    provider: Literal["IndicTrans2", "none"]
+    status: Literal["identity", "translated", "disabled", "unavailable"]
+    source_language: str
+    target_language: str
+    model: str | None = None
+    machine_translated: bool = False
+
+
 class AskResponse(BaseModel):
     answer: str
+    authoritative_answer: str
+    input_language: str
+    response_language: str
+    input_translation: TranslationInfo
+    output_translation: TranslationInfo
     claim_type: Literal["legal_fact", "interpretation", "inference", "unsupported"]
     confidence: float = Field(ge=0, le=1)
     citations: list[Citation]

@@ -91,6 +91,27 @@ def test_safe_abstention_and_case_ownership():
         assert abstention.json()["confidence"] < 0.2
 
 
+def test_non_english_question_abstains_when_translation_is_disabled():
+    with TestClient(app) as client:
+        headers = auth_headers(client, "multilingual")
+        case_id = client.post("/api/v1/cases", json=sample_case(), headers=headers).json()["id"]
+        response = client.post(
+            f"/api/v1/cases/{case_id}/ask",
+            json={
+                "question": "भारत में पेटेंट संबंधी जोखिम क्या हैं?",
+                "input_language": "Hindi",
+                "language": "Hindi",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["claim_type"] == "unsupported"
+        assert body["citations"] == []
+        assert body["input_translation"]["status"] == "disabled"
+        assert body["authoritative_answer"] == body["answer"]
+
+
 def test_upload_rejects_unsupported_type():
     with TestClient(app) as client:
         headers = auth_headers(client, "upload")

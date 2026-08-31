@@ -53,6 +53,7 @@ from services.intelligence import (
     list_sources,
 )
 from services.storage_service import save_upload
+from services.translation import normalize_language, translate_text
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("ip-sakti")
@@ -406,14 +407,54 @@ def get_latest_analysis(case_id: int, db: Db, user: CurrentUser):
     response_model=AskResponse,
     tags=["intelligence"],
 )
-def ask(case_id: int, payload: AskRequest, db: Db, user: CurrentUser):
+async def ask(case_id: int, payload: AskRequest, db: Db, user: CurrentUser):
     case = require_case(db, case_id, user)
-    result = answer_question(case, payload.question, payload.language)
+    try:
+        input_language, _ = normalize_language(payload.input_language)
+        response_language, _ = normalize_language(payload.language)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    input_translation = await translate_text(payload.question, input_language, "English")
+    if input_translation.status in {"disabled", "unavailable"}:
+        result = {
+            "answer": (
+                "The question could not be translated reliably into English, so IP-SAKTI did not run legal or evidence retrieval. "
+                "Retry when IndicTrans2 is available or submit the question in English."
+            ),
+            "claim_type": "unsupported",
+            "confidence": 0.0,
+            "citations": [],
+            "requires_human_review": True,
+            "limitations": [
+                DISCLAIMER,
+                f"Safe abstention: {input_language}-to-English translation was {input_translation.status}.",
+            ],
+        }
+    else:
+        result = answer_question(case, input_translation.text)
+
+    authoritative_answer = result["answer"]
+    output_translation = await translate_text(authoritative_answer, "English", response_language)
+    if output_translation.status in {"disabled", "unavailable"} and response_language != "English":
+        result["limitations"].append(
+            f"IndicTrans2 {response_language} output was {output_translation.status}; the authoritative English response is shown."
+        )
+    result.update(
+        {
+            "answer": output_translation.text,
+            "authoritative_answer": authoritative_answer,
+            "input_language": input_language,
+            "response_language": response_language,
+            "input_translation": input_translation.public(),
+            "output_translation": output_translation.public(),
+        }
+    )
     message = models.ChatMessage(
         case_id=case.id,
         user_id=user.id,
         question=payload.question,
-        answer=result["answer"],
+        answer=authoritative_answer,
         claim_type=result["claim_type"],
         confidence=result["confidence"],
         citations=result["citations"],
@@ -426,7 +467,14 @@ def ask(case_id: int, payload: AskRequest, db: Db, user: CurrentUser):
         "assistant.answered",
         "case",
         case.id,
-        {"message_id": message.id, "claim_type": result["claim_type"]},
+        {
+            "message_id": message.id,
+            "claim_type": result["claim_type"],
+            "input_language": input_language,
+            "response_language": response_language,
+            "input_translation": input_translation.status,
+            "output_translation": output_translation.status,
+        },
     )
     db.commit()
     return result

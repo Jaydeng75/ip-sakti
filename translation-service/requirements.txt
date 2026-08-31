@@ -1,0 +1,8 @@
+fastapi>=0.116,<1.0
+uvicorn[standard]>=0.35,<1.0
+pydantic-settings>=2.10,<3.0
+torch>=2.3,<3.0
+transformers>=4.46,<5.0
+accelerate>=1.0,<2.0
+sentencepiece>=0.2,<1.0
+indictranstoolkit==1.1.1

@@ -586,7 +586,7 @@ def analyze_case(case: Any) -> dict[str, Any]:
     return result
 
 
-def answer_question(case: Any, question: str, language: str = "English") -> dict[str, Any]:
+def answer_question(case: Any, question: str) -> dict[str, Any]:
     normalized = re.sub(r"[^a-z0-9\s-]", " ", question.lower())
     scored: list[tuple[int, dict[str, Any]]] = []
     tokens = {token for token in normalized.split() if len(token) > 2}
@@ -615,10 +615,6 @@ def answer_question(case: Any, question: str, language: str = "English") -> dict
         DISCLAIMER,
         "The answer covers only the cited registry sources, not a comprehensive search.",
     ]
-    if language.lower() != "english":
-        limitations.append(
-            f"A verified {language} translation service is not configured; the authoritative response is returned in English to avoid mistranslating legal content."
-        )
     return {
         "answer": answer,
         "claim_type": "interpretation",
