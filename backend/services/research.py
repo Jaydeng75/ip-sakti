@@ -73,8 +73,34 @@ def _latin_name(ingredient: str) -> str:
     return direct.group(1) if direct else ingredient.split(",", 1)[0].strip()
 
 
+DELIVERY_EXCIPIENT_TERMS = {
+    "phosphatidylcholine", "phospholipid", "lecithin", "liposome", "carrier",
+    "excipient", "surfactant", "capsule", "coating", "spray", "solvent",
+}
+
+
+def _active_ingredients(case: Any) -> list[str]:
+    """Keep botanical actives in the efficacy query and delivery materials out of it."""
+    ingredients = case.ingredients or []
+    botanical: list[str] = []
+    botanical_markers = ("extract", "root", "leaf", "aerial", "whole plant", "herb", "rhizome", "bark", "flower", "seed")
+    for index, item in enumerate(ingredients):
+        candidate = _clean(_latin_name(item))
+        lowered = candidate.lower()
+        has_latin_binomial = bool(re.search(r"\b[A-Z][a-z]+\s+[a-z][a-z-]+\b", item))
+        has_parenthesized_latin = bool(re.search(r"\([A-Z][a-z]+\s+[a-z][a-z-]+\)", item))
+        has_botanical_context = any(marker in item.lower() for marker in botanical_markers)
+        is_delivery_material = any(term in lowered for term in DELIVERY_EXCIPIENT_TERMS)
+        is_active_candidate = index == 0 or has_parenthesized_latin or (has_latin_binomial and has_botanical_context)
+        if candidate and is_active_candidate and not is_delivery_material:
+            botanical.append(candidate)
+    if not botanical and ingredients:
+        botanical = [_clean(_latin_name(ingredients[0]))]
+    return list(dict.fromkeys(botanical))[:3]
+
+
 def build_research_query(case: Any) -> dict[str, str]:
-    ingredients = [_latin_name(item) for item in (case.ingredients or [])[:3]]
+    ingredients = _active_ingredients(case)
     metadata = case.metadata_json or {}
     technical = [
         metadata.get("delivery_mechanism") or case.product_form or "",
@@ -88,7 +114,7 @@ def build_research_query(case: Any) -> dict[str, str]:
     effect_terms = [
         term
         for term in WORD_RE.findall(case.intended_use or "")
-        if term.lower() not in {"and", "the", "for", "daily", "support", "management", "without", "claim"}
+        if term.lower() not in {"and", "the", "for", "daily", "support", "supports", "management", "without", "claim", "healthy", "adult", "adults", "performance"}
     ]
     effect = " ".join(effect_terms[:3])
     pubmed_parts = []
@@ -99,10 +125,26 @@ def build_research_query(case: Any) -> dict[str, str]:
             "(" + " OR ".join(f'\"{term}\"[Title/Abstract]' for term in effect_terms[:3]) + ")"
         )
     pubmed_query = " AND ".join(pubmed_parts) if pubmed_parts else case.title
+    if ingredients:
+        pubmed_query += ' AND (Humans[MeSH Terms] OR human*[Title/Abstract])'
+    delivery_terms = [
+        _clean(str(term))
+        for term in [metadata.get("delivery_mechanism"), case.product_form]
+        if term
+    ]
+    delivery_query = ""
+    if ingredients and delivery_terms:
+        delivery_query = (
+            f'(\"{ingredients[0]}\"[Title/Abstract]) AND ('
+            + " OR ".join(f'\"{term[:100]}\"[Title/Abstract]' for term in delivery_terms[:2])
+            + ")"
+        )
     return {
         "patent_cql": patent_cql,
         "patent_display": " + ".join(patent_terms),
         "pubmed": pubmed_query,
+        "pubmed_clinical": pubmed_query,
+        "pubmed_delivery": delivery_query,
     }
 
 
@@ -370,6 +412,19 @@ def _appraisal_field(
     return fallback, None
 
 
+def _verified_duration(value: str) -> str:
+    """Reject extraction hits such as 'follow-up occurred' that contain no duration."""
+    time_value = re.search(r"\b\d+(?:\.\d+)?\s*(?:hours?|days?|weeks?|months?|years?)\b", value, re.IGNORECASE)
+    age_only = re.search(r"\b(?:aged?|years? old)\b", value, re.IGNORECASE) and not re.search(
+        r"\b(?:treat|follow[- ]?up|duration|period|received|administered|intervention|study lasted)\b",
+        value,
+        re.IGNORECASE,
+    )
+    if time_value and not age_only:
+        return value
+    return "Treatment or follow-up duration was not located in the retrieved full text."
+
+
 def _pmc_identifier(article: ElementTree.Element) -> str | None:
     for identifier in _local_nodes(article, "article-id"):
         if identifier.attrib.get("pub-id-type") in {"pmc", "pmcid"}:
@@ -505,6 +560,10 @@ def _parse_pmc_appraisals(content: bytes) -> dict[str, dict[str, Any]]:
             [r"\b\d+(?:\.\d+)?\s*(?:days?|weeks?|months?|years?)\b", r"\bfollow[- ]up\b", r"\btreatment period\b"],
             "Treatment or follow-up duration was not located in the retrieved full text.",
         )
+        verified_duration = _verified_duration(duration)
+        if verified_duration != duration:
+            duration_locator = None
+        duration = verified_duration
         endpoints, endpoints_locator = _appraisal_field(
             method_sources,
             [r"\bprimary (?:outcome|endpoint)\b", r"\bsecondary (?:outcome|endpoint)\b", r"\boutcome measure\b", r"\bwas assessed\b", r"\bwas measured\b"],
@@ -718,11 +777,28 @@ def search_pubmed(case: Any, query: dict[str, str]) -> dict[str, Any]:
             "search_url": search_url,
         }
     try:
-        records = list(_pubmed_search(query["pubmed"]))
+        records = [
+            dict(record, retrieval_scope="ingredient_clinical")
+            for record in _pubmed_search(query.get("pubmed_clinical", query["pubmed"]))
+        ]
+        delivery_query = query.get("pubmed_delivery", "")
+        if delivery_query:
+            delivery_records = [
+                dict(record, retrieval_scope="delivery_system")
+                for record in _pubmed_search(delivery_query)
+            ]
+            seen = {record.get("pmid") or record.get("doi") or record.get("title") for record in records}
+            records.extend(
+                record
+                for record in delivery_records
+                if (record.get("pmid") or record.get("doi") or record.get("title")) not in seen
+            )
         return {
             "status": "live" if records else "no_results",
             "provider": "NCBI PubMed E-utilities",
             "query": query["pubmed"],
+            "clinical_query": query.get("pubmed_clinical", query["pubmed"]),
+            "delivery_query": delivery_query,
             "records": records,
             "search_url": search_url,
         }

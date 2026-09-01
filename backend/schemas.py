@@ -92,7 +92,7 @@ class Citation(BaseModel):
     support_status: str
     excerpt: str
     locator: str | None = None
-    source_type: Literal["official", "case_document"] = "official"
+    source_type: Literal["official", "case_document", "scientific_literature"] = "official"
     content_sha256: str | None = None
     retrieval_score: float | None = None
     lexical_score: float | None = None
@@ -121,6 +121,11 @@ class AskResponse(BaseModel):
     output_translation: TranslationInfo
     claim_type: Literal["legal_fact", "interpretation", "inference", "unsupported"]
     confidence: float = Field(ge=0, le=1)
+    confidence_label: str = "Unspecified"
+    confidence_basis: str = ""
+    intent: str = "GENERAL"
+    evidence_summary: dict[str, int] | None = None
+    methodology: list[str] = Field(default_factory=list)
     citations: list[Citation]
     requires_human_review: bool
     limitations: list[str]

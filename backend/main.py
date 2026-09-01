@@ -650,7 +650,18 @@ async def ask(case_id: int, payload: AskRequest, db: Db, user: CurrentUser):
         }
     else:
         evidence_matches = retrieve_case_evidence(db, case.id, input_translation.text, limit=5)
-        result = answer_question(case, input_translation.text, evidence_matches)
+        analysis_run = db.scalar(
+            select(models.AnalysisRun)
+            .where(models.AnalysisRun.case_id == case.id)
+            .order_by(desc(models.AnalysisRun.created_at))
+            .limit(1)
+        )
+        result = answer_question(
+            case,
+            input_translation.text,
+            evidence_matches,
+            analysis_run.result if analysis_run else None,
+        )
 
     authoritative_answer = result["answer"]
     output_translation = await translate_text(authoritative_answer, "English", response_language)

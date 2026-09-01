@@ -187,6 +187,108 @@ def _uploaded_study_records(case: Any, matches: list[dict[str, Any]]) -> list[di
     return records[:8]
 
 
+def _contains_phrase_or_tokens(haystack: str, value: str) -> bool:
+    normalized_haystack = " ".join(haystack.lower().split())
+    normalized_value = " ".join(value.lower().split())
+    if normalized_value and normalized_value in normalized_haystack:
+        return True
+    tokens = _tokens(value)
+    return bool(tokens) and len(tokens & _tokens(haystack)) >= min(2, len(tokens))
+
+
+def annotate_study_matches(case: Any, records: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    metadata = _metadata(case)
+    primary_ingredient = (case.ingredients or [""])[0]
+    latin_match = re.search(r"\b([A-Z][a-z]+\s+[a-z][a-z-]+)\b", primary_ingredient)
+    ingredient_terms = [latin_match.group(1) if latin_match else primary_ingredient.split(",", 1)[0]]
+    claim_text = " ".join([case.intended_use or "", str(metadata.get("proposed_claim", ""))])
+    endpoint_terms = [
+        token for token in _tokens(claim_text)
+        if token not in {"healthy", "adult", "adults", "supports", "support", "performance"}
+    ]
+    population_terms = [term for term in ("healthy", "adult", "adults") if term in claim_text.lower()]
+    dose_numbers = re.findall(r"\b\d+(?:\.\d+)?\s*(?:mg|g|ml|µg|mcg)\b", str(metadata.get("dose", "")), re.IGNORECASE)
+    standardization_numbers = re.findall(r"\b\d+(?:\.\d+)?%\b", str(metadata.get("standardization", "")))
+    formulation_text = " ".join(
+        str(value) for value in [case.product_form, metadata.get("delivery_mechanism", "")] if value
+    )
+    formulation_terms = [
+        token for token in _tokens(formulation_text)
+        if token not in {"oral", "based", "delivery", "system"}
+    ]
+
+    counts = {
+        "direct_product": 0,
+        "ingredient_level": 0,
+        "dose_matched": 0,
+        "formulation_matched": 0,
+        "population_matched": 0,
+        "endpoint_matched": 0,
+    }
+    annotated: list[dict[str, Any]] = []
+    for record in records:
+        title_text = str(record.get("title", ""))
+        haystack = " ".join(
+            str(record.get(key, ""))
+            for key in ["title", "abstract_excerpt", "population", "dose", "endpoints", "study_design"]
+        )
+        ingredient_match = any(_contains_phrase_or_tokens(haystack, term) for term in ingredient_terms if term)
+        ingredient_in_title = any(_contains_phrase_or_tokens(title_text, term) for term in ingredient_terms if term)
+        population_match = bool(population_terms) and all(term in haystack.lower() for term in population_terms)
+        endpoint_hits = sorted({term for term in endpoint_terms if term in haystack.lower()})
+        endpoint_title_hits = sorted({term for term in endpoint_terms if term in title_text.lower()})
+        endpoint_match = bool(endpoint_terms) and len(endpoint_hits) >= min(2, len(endpoint_terms))
+        dose_match = bool(dose_numbers) and any(number.lower() in haystack.lower() for number in dose_numbers)
+        standardization_match = bool(standardization_numbers) and any(number in haystack for number in standardization_numbers)
+        formulation_hits = sorted({term for term in formulation_terms if term in haystack.lower()})
+        formulation_match = bool(formulation_terms) and len(formulation_hits) >= min(2, len(formulation_terms))
+        direct = all([ingredient_match, population_match, endpoint_match, dose_match, formulation_match])
+        if direct:
+            role = "direct_product"
+        elif record.get("retrieval_scope") == "delivery_system" or formulation_match:
+            role = "delivery_system"
+        elif ingredient_match:
+            role = "ingredient_clinical"
+        else:
+            role = "excluded_irrelevant"
+        quality = (
+            "full_text_appraised"
+            if record.get("appraisal_status") == "full_text_structured_appraisal"
+            else "abstract_or_passage_only"
+        )
+        profile = {
+            "ingredient": ingredient_match,
+            "population": population_match,
+            "endpoint": endpoint_match,
+            "dose": dose_match,
+            "standardization": standardization_match,
+            "formulation": formulation_match,
+            "endpoint_hits": endpoint_hits,
+            "endpoint_title_hits": endpoint_title_hits,
+            "formulation_hits": formulation_hits,
+            "quality": quality,
+        }
+        score = min(100, sum(
+            weight for matched, weight in [
+                (ingredient_match, 30), (population_match, 15), (endpoint_match, 20),
+                (dose_match, 15), (formulation_match, 15),
+                (quality == "full_text_appraised", 5),
+                (ingredient_in_title, 8), (bool(endpoint_title_hits), 5),
+            ] if matched
+        ))
+        enriched = {**record, "evidence_role": role, "match_profile": profile, "match_score": score}
+        annotated.append(enriched)
+        if role != "excluded_irrelevant":
+            counts["ingredient_level"] += int(ingredient_match)
+            counts["dose_matched"] += int(dose_match)
+            counts["formulation_matched"] += int(formulation_match)
+            counts["population_matched"] += int(population_match)
+            counts["endpoint_matched"] += int(endpoint_match)
+            counts["direct_product"] += int(direct)
+    annotated.sort(key=lambda record: (record["evidence_role"] == "excluded_irrelevant", -record["match_score"]))
+    return annotated, counts
+
+
 def _specific_recommendations(case: Any, completeness: dict[str, Any], patents: dict[str, Any], studies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     metadata = _metadata(case)
     recommendations = []
@@ -250,12 +352,14 @@ def build_case_specific_analysis(case: Any, evidence_matches: list[dict[str, Any
     tk_records = _uploaded_tk_records(case, evidence_matches)
     uploaded_studies = _uploaded_study_records(case, evidence_matches)
     live_studies = external_research.get("science", {}).get("records", [])
-    studies = [*uploaded_studies, *live_studies]
+    studies, match_counts = annotate_study_matches(case, [*uploaded_studies, *live_studies])
     full_text_appraised_count = sum(
-        record.get("source_status") == "pmc_full_text_appraised" for record in live_studies
+        record.get("source_status") == "pmc_full_text_appraised" and record.get("evidence_role") != "excluded_irrelevant"
+        for record in studies
     )
     abstract_only_count = sum(
-        record.get("source_status") == "pubmed_abstract_only" for record in live_studies
+        record.get("source_status") == "pubmed_abstract_only" and record.get("evidence_role") != "excluded_irrelevant"
+        for record in studies
     )
     tk_query = " ".join([*(case.ingredients or []), _value(case, "classical_reference"), case.intended_use or ""]).strip()
     return {
@@ -277,6 +381,13 @@ def build_case_specific_analysis(case: Any, evidence_matches: list[dict[str, Any
         "scientific_studies": {
             **external_research.get("science", {}),
             "records": studies,
+            "match_counts": match_counts,
+            "evidence_layers": {
+                "direct_product": "Exact product/formulation evidence" if match_counts["direct_product"] else "No exact product study identified",
+                "ingredient_clinical": "Human ingredient-level evidence available" if match_counts["ingredient_level"] else "No ingredient-level human evidence identified",
+                "delivery_system": "Delivery-system evidence identified" if match_counts["formulation_matched"] else "No formulation-matched evidence identified",
+                "traditional_use": "Kept separate from clinical support",
+            },
             "uploaded_record_count": len(uploaded_studies),
             "live_record_count": len(live_studies),
             "full_text_appraised_count": full_text_appraised_count,

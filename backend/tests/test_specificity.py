@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
 from services import research
-from services.research import _bigquery_terms, _parse_pmc_appraisals, _parse_pubmed, build_research_query
-from services.specificity import build_case_specific_analysis, build_specific_design_around
+from services.research import _bigquery_terms, _parse_pmc_appraisals, _parse_pubmed, _verified_duration, build_research_query
+from services.specificity import annotate_study_matches, build_case_specific_analysis, build_specific_design_around
 
 
 def detailed_case():
@@ -134,6 +134,58 @@ def test_research_query_uses_ingredient_or_group():
     assert "Withania somnifera" in query["pubmed"]
     assert "Title/Abstract" in query["pubmed"]
     assert '"and"[Title/Abstract]' not in query["pubmed"]
+
+
+def test_bacopa_clinical_query_excludes_delivery_excipient_and_keeps_delivery_query_separate():
+    case = SimpleNamespace(
+        title="BrahmiQ",
+        ingredients=["Bacopa monnieri extract", "Phosphatidylcholine", "Glycerol", "Purified water"],
+        product_form="Oral mucosal spray",
+        intended_use="Supports memory, attention and cognitive performance in healthy adults",
+        metadata_json={"delivery_mechanism": "Phospholipid-based metered oral spray"},
+    )
+    query = build_research_query(case)
+
+    assert "Bacopa monnieri" in query["pubmed_clinical"]
+    assert "Phosphatidylcholine" not in query["pubmed_clinical"]
+    assert "Glycerol" not in query["pubmed_clinical"]
+    assert "Purified water" not in query["pubmed_clinical"]
+    assert "oral spray" in query["pubmed_delivery"].lower()
+
+
+def test_study_matching_does_not_promote_ingredient_study_to_exact_product_evidence():
+    case = SimpleNamespace(
+        ingredients=["Bacopa monnieri extract"],
+        product_form="Oral mucosal spray",
+        intended_use="Supports memory, attention and cognitive performance in healthy adults",
+        metadata_json={
+            "dose": "150 mg/day",
+            "standardization": "50% bacosides",
+            "delivery_mechanism": "Phospholipid-based metered oral mucosal spray",
+        },
+    )
+    records, counts = annotate_study_matches(case, [{
+        "title": "Bacopa monnieri capsules for memory in healthy adults",
+        "abstract_excerpt": "Healthy adults received 300 mg capsules. Memory improved; attention was measured.",
+        "population": "Healthy adults",
+        "dose": "300 mg capsules",
+        "endpoints": "Memory and attention",
+        "study_design": "Randomized trial",
+        "appraisal_status": "abstract_only",
+        "retrieval_scope": "ingredient_clinical",
+    }])
+
+    assert records[0]["evidence_role"] == "ingredient_clinical"
+    assert counts["ingredient_level"] == 1
+    assert counts["direct_product"] == 0
+    assert counts["dose_matched"] == 0
+    assert counts["formulation_matched"] == 0
+
+
+def test_duration_verifier_requires_an_actual_time_value():
+    assert _verified_duration("Participants completed follow-up visits.").startswith("Treatment or follow-up")
+    assert _verified_duration("Participants were aged between 6 and 14 years.").startswith("Treatment or follow-up")
+    assert _verified_duration("Participants completed 12 weeks of treatment.") == "Participants completed 12 weeks of treatment."
 
 
 def test_bigquery_query_terms_preserve_searchable_detail():

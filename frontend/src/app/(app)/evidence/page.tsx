@@ -18,8 +18,10 @@ export default function ScientificEvidencePage() {
   const retrieval = analysis?.result.evidence_retrieval;
   const claimGraph = analysis?.result.claim_evidence_graph;
   const studies = analysis?.result.case_specific_analysis?.scientific_studies;
-  const fullTextStudyCount = studies?.full_text_appraised_count ?? studies?.records.filter((study) => study.appraisal_status === "full_text_structured_appraisal").length ?? 0;
-  const abstractOnlyStudyCount = studies?.abstract_only_count ?? studies?.records.filter((study) => study.source_status !== "uploaded_case_document_unappraised" && study.appraisal_status !== "full_text_structured_appraisal").length ?? 0;
+  const matchCounts = studies?.match_counts ?? evidence?.match_counts ?? {};
+  const visibleStudies = studies?.records.filter((study) => study.evidence_role !== "excluded_irrelevant") ?? [];
+  const fullTextStudyCount = visibleStudies.filter((study) => study.appraisal_status === "full_text_structured_appraisal").length;
+  const abstractOnlyStudyCount = visibleStudies.filter((study) => study.source_status !== "uploaded_case_document_unappraised" && study.appraisal_status !== "full_text_structured_appraisal").length;
 
   const refreshDocuments = useCallback(async () => {
     if (!currentCase.backendId) return;
@@ -79,18 +81,20 @@ export default function ScientificEvidencePage() {
       {!evidence ? <AnalysisState loading={loading} error={error} /> : (
         <>
           <section className="mt-8 rounded-2xl border border-warm/30 bg-warm-subtle p-5"><p className="text-sm font-semibold text-warm">Important evidence boundary</p><p className="mt-2 text-base leading-6 text-ink">{evidence.notice}</p></section>
-          <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <EvidenceCard number="01" title="Traditional-use claims" status={evidence.traditional_use.status} summary={evidence.traditional_use.summary} confidence={evidence.traditional_use.confidence} />
-            <EvidenceCard number="02" title="Modern scientific evidence" status={evidence.modern_science.status} summary={evidence.modern_science.summary} confidence={evidence.modern_science.confidence} />
-            <EvidenceCard number="03" title="Safety information" status={evidence.safety.status} summary={evidence.safety.summary} confidence={evidence.safety.confidence} />
-            <div className="rounded-2xl border border-border bg-[#16212B] p-6 text-white"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/50">04 / Evidence confidence</p><p className="mt-5 text-3xl font-semibold">{Math.round(evidence.confidence.score * 100)}%</p><p className="mt-2 text-sm font-medium">{evidence.confidence.label}</p><p className="mt-3 text-xs leading-5 text-white/60">{evidence.confidence.basis}</p></div>
+          <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <LayerCard number="01" title="Direct product evidence" value={matchCounts.direct_product ?? 0} summary="Same active, population, endpoints, dose and formulation." />
+            <LayerCard number="02" title="Ingredient clinical evidence" value={matchCounts.ingredient_level ?? 0} summary="Human studies matching the active botanical; not automatically product proof." />
+            <LayerCard number="03" title="Delivery-system evidence" value={matchCounts.formulation_matched ?? 0} summary="Evidence matching the submitted spray/phospholipid architecture." />
+            <LayerCard number="04" title="Traditional use" value={evidence.traditional_use.status === "reported" ? 1 : 0} summary="Displayed separately and never counted as clinical efficacy." />
+            <div className="rounded-2xl border border-border bg-[#16212B] p-6 text-white"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/50">05 / Scientific evidence readiness</p><p className="mt-5 text-3xl font-semibold">{evidence.readiness_score ?? 31}/100</p><p className="mt-2 text-sm font-medium">{evidence.confidence.label}</p><p className="mt-3 text-xs leading-5 text-white/60">{evidence.confidence.basis}</p></div>
           </section>
+          <section className="mt-4 rounded-2xl border border-border bg-surface p-5"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Safety evidence</p><p className="mt-2 text-sm font-semibold">{evidence.safety.status.replaceAll("_", " ")}</p><p className="mt-2 text-xs leading-5 text-ink-muted">{evidence.safety.summary}</p></section>
           {studies && (
             <section className="mt-8 rounded-3xl border border-border bg-surface p-6 md:p-8">
               <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
                 <div>
-                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Full-text study appraisal</p>
-                  <h2 className="mt-2 text-2xl font-semibold">Methods, outcomes, safety and reporting signals</h2>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Claim-match evidence matrix</p>
+                  <h2 className="mt-2 text-2xl font-semibold">Direct product, ingredient and delivery evidence stay separate.</h2>
                   <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-muted">Query: {studies.query}. {studies.notice}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <StudyStatus label="PMC full text appraised" value={fullTextStudyCount} tone="positive" />
@@ -100,14 +104,14 @@ export default function ScientificEvidencePage() {
                 </div>
                 <a href={studies.search_url} target="_blank" rel="noreferrer" className="rounded-xl border border-accent px-4 py-2 text-xs font-semibold text-accent">Open PubMed search ↗</a>
               </div>
-              {studies.records.length === 0 ? (
+              {visibleStudies.length === 0 ? (
                 <div className="mt-6 rounded-2xl border border-warm/30 bg-warm-subtle p-5">
                   <p className="text-sm font-semibold text-warm">No study record was retrieved for this exact query.</p>
                   <p className="mt-2 text-xs leading-5 text-ink-muted">Do not substitute ingredient-level popularity for product-specific evidence. Refine the query or upload the relevant full text.</p>
                 </div>
               ) : (
                 <div className="mt-6 space-y-4">
-                  {studies.records.map((study, index) => {
+                  {visibleStudies.map((study, index) => {
                     const fullText = study.appraisal_status === "full_text_structured_appraisal";
                     return (
                       <article key={`${study.pmid ?? study.locator}-${index}`} className="rounded-2xl border border-border bg-background p-5">
@@ -118,6 +122,8 @@ export default function ScientificEvidencePage() {
                                 {fullText ? "PMC full text appraised" : "Abstract / passage only"}
                               </span>
                               {study.study_type && study.study_type !== "not_appraised" && <span className="rounded-full border border-border px-2.5 py-1 font-mono text-[9px] uppercase text-ink-muted">{formatSignal(study.study_type)}</span>}
+                              {study.evidence_role && <span className="rounded-full border border-border px-2.5 py-1 font-mono text-[9px] uppercase text-ink-muted">{formatSignal(study.evidence_role)}</span>}
+                              {typeof study.match_score === "number" && <span className="font-mono text-[9px] text-accent">MATCH {study.match_score}/100</span>}
                               {study.pmcid && <span className="font-mono text-[9px] text-ink-muted">{study.pmcid}</span>}
                             </div>
                             <p className="mt-3 text-sm font-semibold">{study.title}</p>
@@ -126,6 +132,7 @@ export default function ScientificEvidencePage() {
                           <a href={study.full_text_url ?? study.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-accent">{fullText ? "Open PMC full text" : "Open source"} ↗</a>
                         </div>
                         {!fullText && <p className="mt-4 rounded-xl border border-warm/30 bg-warm-subtle p-3 text-xs leading-5 text-warm">This record is not a full-text appraisal. Treat all extracted fields as screening leads only.</p>}
+                        {study.match_profile && <div className="mt-4 flex flex-wrap gap-2"><MatchBadge label="ingredient" matched={study.match_profile.ingredient} /><MatchBadge label="population" matched={study.match_profile.population} /><MatchBadge label="endpoint" matched={study.match_profile.endpoint} /><MatchBadge label="dose" matched={study.match_profile.dose} /><MatchBadge label="standardization" matched={study.match_profile.standardization} /><MatchBadge label="formulation" matched={study.match_profile.formulation} /></div>}
                         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                           <StudyFact label="Study design" value={study.study_design ?? "Not appraised."} locator={study.section_locators?.study_design} />
                           <StudyFact label="Population" value={study.population} locator={study.section_locators?.population} />
@@ -171,9 +178,9 @@ export default function ScientificEvidencePage() {
   );
 }
 
-function EvidenceCard({ number, title, status, summary, confidence }: { number: string; title: string; status: string; summary: string; confidence: number }) {
-  return <article className="rounded-2xl border border-border bg-surface p-6"><div className="flex items-center justify-between"><span className="font-mono text-[10px] text-accent">{number}</span><span className="rounded-full bg-accent-subtle px-2 py-1 font-mono text-[9px] uppercase text-accent">{status.replaceAll("_", " ")}</span></div><h2 className="mt-5 text-lg font-semibold">{title}</h2><p className="mt-3 text-sm leading-6 text-ink-muted">{summary}</p><div className="mt-5 h-1.5 rounded-full bg-accent-subtle"><div className="h-full rounded-full bg-accent" style={{ width: `${confidence * 100}%` }} /></div><p className="mt-2 font-mono text-[9px] text-ink-muted">{Math.round(confidence * 100)}% screening confidence</p></article>;
-}
+function LayerCard({ number, title, value, summary }: { number: string; title: string; value: number; summary: string }) { return <article className="rounded-2xl border border-border bg-surface p-6"><div className="flex items-center justify-between"><span className="font-mono text-[10px] text-accent">{number}</span><span className="text-2xl font-semibold text-accent">{value}</span></div><h2 className="mt-5 text-lg font-semibold">{title}</h2><p className="mt-3 text-sm leading-6 text-ink-muted">{summary}</p></article>; }
+
+function MatchBadge({ label, matched }: { label: string; matched: boolean }) { return <span className={`rounded-full px-2.5 py-1 font-mono text-[9px] uppercase ${matched ? "bg-accent-subtle text-accent" : "bg-danger/10 text-danger"}`}>{matched ? "✓" : "✕"} {label}</span>; }
 
 function VaultMetric({ label, value }: { label: string; value: number }) {
   return <div className="rounded-xl border border-border bg-background p-4"><p className="text-2xl font-semibold text-accent">{value}</p><p className="mt-1 text-xs text-ink-muted">{label}</p></div>;

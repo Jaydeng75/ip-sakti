@@ -55,7 +55,9 @@ def test_authenticated_case_analysis_and_grounded_answer():
         analyzed = client.post(f"/api/v1/cases/{case_id}/analyze", headers=headers)
         assert analyzed.status_code == 200, analyzed.text
         result = analyzed.json()["result"]
-        assert "wellness/nutraceutical" in result["classification"]["label"].lower()
+        assert result["classification"]["label"] == "Provisional classification: requires route determination"
+        assert result["classification"]["candidate_pathways"]
+        assert result["decision_brief"]["strongest_protectable_element"]
         assert (
             result["scientific_evidence"]["notice"]
             == "Traditional use is not equivalent to clinically established efficacy."
@@ -77,6 +79,7 @@ def test_authenticated_case_analysis_and_grounded_answer():
         assert all(item.get("basis") for item in result["design_around"]["alternatives"])
         assert result["evidence_retrieval"]["prefetch_limit"] >= 8
         assert result["evidence_retrieval"]["reranker"]
+        assert result["risk_cards"][1]["positive_signals"]
 
         answer = client.post(
             f"/api/v1/cases/{case_id}/ask",
@@ -89,6 +92,18 @@ def test_authenticated_case_analysis_and_grounded_answer():
         assert body["citations"]
         assert all(item["url"].startswith("https://") for item in body["citations"])
         assert body["requires_human_review"] is True
+
+        scientific = client.post(
+            f"/api/v1/cases/{case_id}/ask",
+            json={"question": "Does human evidence support this exact dose and formulation?"},
+            headers=headers,
+        )
+        assert scientific.status_code == 200, scientific.text
+        science_body = scientific.json()
+        assert science_body["intent"] == "SCIENTIFIC_EVIDENCE"
+        assert science_body["evidence_summary"] is not None
+        assert all(item["source_type"] != "official" for item in science_body["citations"])
+        assert "FORMULATION-SPECIFIC EVIDENCE MISSING" in science_body["answer"]
 
         short_greeting = client.post(
             f"/api/v1/cases/{case_id}/ask",

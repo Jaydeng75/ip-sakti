@@ -204,5 +204,29 @@
     "summary": "Indian Patent Office practice manual used as procedural guidance alongside the Patents Act, Rules, current office notices and case law.",
     "locator": "Patentability and examination chapters",
     "keywords": ["india", "patent office", "manual", "examination", "prior art", "claims"]
+  },
+  {
+    "id": "uk-mhra-traditional-herbal-registration",
+    "title": "Apply for a Traditional Herbal Registration (THR)",
+    "authority": "Medicines and Healthcare products Regulatory Agency",
+    "jurisdiction": "United Kingdom",
+    "effective_date": "Updated 2024-01-05",
+    "url": "https://www.gov.uk/guidance/apply-for-a-traditional-herbal-registration-thr",
+    "support_status": "official-guidance",
+    "summary": "Official UK pathway guidance for traditional herbal medicinal products. A THR is required before marketing a qualifying traditional herbal medicine; products making claims for major conditions require the relevant marketing-authorisation route.",
+    "locator": "Eligibility for the THR Scheme",
+    "keywords": ["uk", "united kingdom", "mhra", "traditional herbal", "medicine", "registration", "thr", "claim"]
+  },
+  {
+    "id": "uk-food-health-claims",
+    "title": "Nutrition, Health Claims and Supplement Labelling",
+    "authority": "Government of the United Kingdom",
+    "jurisdiction": "United Kingdom",
+    "effective_date": "Current guidance; checked 2026-09-01",
+    "url": "https://www.gov.uk/food-labelling-and-packaging/nutrition-health-claims-and-supplement-labelling",
+    "support_status": "official-guidance",
+    "summary": "Official UK guidance for nutrition and health claims and food-supplement labelling. Food claims must follow the applicable rules and must not state or imply treatment, prevention or cure of disease.",
+    "locator": "Nutrition and health claims; food supplements",
+    "keywords": ["uk", "united kingdom", "food supplement", "health claim", "label", "nutrition", "disease claim"]
   }
 ]

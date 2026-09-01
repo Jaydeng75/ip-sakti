@@ -83,8 +83,8 @@ def classify_product(case: Any) -> dict[str, Any]:
         confidence = 0.68
         citation_ids = ["drugs-cosmetics-act-india"]
     elif _contains(text, ["wellbeing", "wellness", "stress", "resilience", "support"]):
-        label = "Potential wellness/nutraceutical or proprietary AYUSH product"
-        pathway = "The submitted non-disease support claim, dosage form and botanical composition require a documented FSSAI-versus-AYUSH classification decision before labelling or evidence planning."
+        label = "Provisional classification: requires route determination"
+        pathway = "Candidate pathways are an AYUSH proprietary medicine, a nutraceutical/food supplement, or another applicable oral wellness-product pathway. The final route depends on exact claims, dosage form, composition and market presentation."
         confidence = 0.63
         citation_ids = ["fssai-ayurveda-aahara-2022", "drugs-cosmetics-act-india"]
     else:
@@ -99,6 +99,13 @@ def classify_product(case: Any) -> dict[str, Any]:
         "pathway": pathway,
         "confidence": confidence,
         "requires_human_review": True,
+        "status": "unresolved",
+        "candidate_pathways": [
+            "AYUSH proprietary medicine",
+            "Nutraceutical / food supplement",
+            "Other applicable oral wellness-product pathway",
+        ] if label == "Provisional classification: requires route determination" else [label],
+        "decision_factors": ["Exact intended claim", "Dosage form and route", "Composition and dose", "Labelling and market presentation"],
         "citations": [public_citation(item) for item in citation_ids],
     }
 
@@ -165,8 +172,16 @@ def build_genome(case: Any) -> dict[str, Any]:
     return {"nodes": nodes, "edges": edges}
 
 
-def build_risks(case: Any) -> list[dict[str, Any]]:
+def build_risks(case: Any, specific: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     text = _text(case)
+    metadata = case.metadata_json or {}
+    specific = specific or {}
+    study_counts = specific.get("scientific_studies", {}).get("match_counts", {})
+    botanical = (case.ingredients or ["the botanical ingredient"])[0]
+    short_botanical = re.sub(r"\s+(?:extract|powder).*", "", botanical, flags=re.IGNORECASE)
+    delivery = str(metadata.get("delivery_mechanism") or case.product_form or "the submitted delivery format")
+    standardization = str(metadata.get("standardization") or "the submitted standardization")
+    dose = str(metadata.get("dose") or metadata.get("quantitative_composition") or "the proposed dose")
     tk_score = (
         84 if case.classical_formulation else (68 if _contains(text, ["ayur", "traditional", "classical"]) else 38)
     )
@@ -191,38 +206,67 @@ def build_risks(case: Any) -> list[dict[str, Any]]:
     risks = [
         {
             "key": "traditional_knowledge",
-            "title": "Traditional Knowledge Risk",
+            "title": "Traditional knowledge exposure",
             "score": tk_score,
             "level": "high" if tk_score >= 70 else "medium",
-            "summary": "A documented classical or customary use may be prior art and can narrow patentable subject matter.",
+            "summary": f"High relevance for {short_botanical} and the submitted cognitive/traditional use; lower or unknown relevance for {delivery}.",
+            "primary_finding": f"High for: {short_botanical} + the claimed use",
+            "positive_signals": [f"Modern technical feature: {delivery}", f"Modern compositional feature: {standardization}"],
+            "negative_signals": [f"Known-use exposure: {short_botanical} and the claimed use", "Verified exact TK source is not yet linked"],
+            "missing_evidence": ["Exact classical formulation/passage and locator", "Authorized TKDL or classical-source verification"],
+            "what_changes_score": ["Exact source linkage increases certainty", "A verified absence cannot be inferred from an incomplete TKDL search"],
         },
         {
             "key": "patent_opportunity",
-            "title": "Patent Opportunity",
+            "title": "Patent screening",
             "score": patent_score,
             "level": "strong" if patent_score >= 65 else "uncertain",
-            "summary": "Novel delivery, standardization or process features may be more defensible than the known ingredients or use.",
+            "summary": f"Strongest candidate: {delivery}. The known botanical use is the weakest candidate until claim-level prior-art comparison is complete.",
+            "primary_finding": f"Strongest candidate: {delivery}",
+            "positive_signals": ["Non-classical dosage form", "Phospholipid/delivery architecture", "Metered delivery and defined standardization"],
+            "negative_signals": [f"Known {short_botanical} use", "Possible obviousness", "Prior-art search incomplete", "No complete claim-level comparison"],
+            "missing_evidence": ["Feature-by-feature independent claim chart", "Patent-family/legal-status review", "Comparative technical-effect data"],
+            "what_changes_score": ["A non-obvious measured technical effect strengthens the screen", "Close claim overlap or routine optimization weakens it"],
         },
         {
             "key": "regulatory",
             "title": "Regulatory Complexity",
             "score": regulatory_score,
             "level": "high" if regulatory_score >= 70 else "medium",
-            "summary": "Classification and claims must be fixed before the evidence and licensing route can be confirmed.",
+            "summary": "Classification remains unresolved among AYUSH, nutraceutical/supplement and other oral wellness pathways.",
+            "primary_finding": "Status: unresolved",
+            "positive_signals": ["Dosage form, composition and target markets are supplied"],
+            "negative_signals": ["Final intended market claim and positioning control the route"],
+            "missing_evidence": ["Signed claim/positioning matrix", "India and UK route determinations"],
+            "what_changes_score": ["Final label wording and therapeutic positioning can change the applicable pathway"],
         },
         {
             "key": "abs",
-            "title": "ABS Review Required",
+            "title": "ABS review priority",
             "score": abs_score,
             "level": "required" if abs_score >= 60 else "screen",
-            "summary": "Trace resource identity, source, provider, access date and parties before deciding ABS obligations.",
+            "summary": "Resource provenance is captured at intake; legal applicability and transaction-specific obligations still require review.",
+            "display_value": "High" if abs_score >= 60 else "Screen",
+            "score_is_probability": False,
+            "primary_finding": "Provenance captured; applicability unresolved",
+            "positive_signals": [case.biological_sourcing or "Botanical resource identity supplied"],
+            "negative_signals": ["The screening score is not a probability of legal obligation"],
+            "missing_evidence": ["Provider/access-date/party verification", "Qualified ABS applicability review"],
+            "what_changes_score": ["Species, origin, transaction and applicant status determine the legal analysis"],
         },
         {
             "key": "evidence",
-            "title": "Scientific Evidence Strength",
+            "title": "Scientific evidence readiness",
             "score": evidence_score,
             "level": "moderate" if evidence_score >= 60 else "limited",
-            "summary": "Traditional use is not equivalent to clinically established efficacy; claim-specific modern evidence is needed.",
+            "summary": f"Ingredient-level human evidence may exist, but evidence matching {dose}, {delivery}, the proposed population and the complete claim remains incomplete.",
+            "display_value": f"{evidence_score}/100",
+            "score_is_probability": False,
+            "primary_finding": "Exact-formulation claim support is not established",
+            "positive_signals": [f"Ingredient-level matched studies: {study_counts.get('ingredient_level', 0)}", f"Population-matched studies: {study_counts.get('population_matched', 0)}"],
+            "negative_signals": [f"Dose-matched studies: {study_counts.get('dose_matched', 0)}", f"Formulation-matched studies: {study_counts.get('formulation_matched', 0)}", f"Direct exact-product studies: {study_counts.get('direct_product', 0)}"],
+            "missing_evidence": ["Same/comparable standardized extract", "Dose-matched healthy-adult evidence", "Oral-mucosal delivery bridging evidence", "Claim-specific safety/tolerability"],
+            "what_changes_score": ["Direct formulation trials raise readiness", "Indirect ingredient evidence alone cannot establish the exact product claim"],
         },
     ]
     support = {
@@ -340,11 +384,37 @@ def build_knowledge_graph(case: Any, evidence_matches: list[dict[str, Any]] | No
     }
 
 
-def build_evidence(case: Any, evidence_matches: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def scientific_citation(record: dict[str, Any]) -> dict[str, Any]:
+    identifier = record.get("pmid") or record.get("pmcid") or record.get("doi") or str(abs(hash(record.get("title", "study"))))
+    return {
+        "id": f"science-{identifier}",
+        "title": record.get("title") or "Scientific study",
+        "authority": record.get("journal") or "Scientific literature",
+        "jurisdiction": "International scientific literature",
+        "effective_date": record.get("publication_date") or "Not reported",
+        "url": record.get("full_text_url") or record.get("url") or "https://pubmed.ncbi.nlm.nih.gov/",
+        "support_status": record.get("evidence_role", "scientific_screening"),
+        "excerpt": record.get("abstract_excerpt") or record.get("endpoints") or "Study record retrieved for appraisal.",
+        "source_type": "scientific_literature",
+        "locator": record.get("pmcid") or (f"PMID {record['pmid']}" if record.get("pmid") else record.get("locator")),
+    }
+
+
+def build_evidence(
+    case: Any,
+    evidence_matches: list[dict[str, Any]] | None = None,
+    scientific_studies: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     text = _text(case)
     document_citations = [evidence_citation(case.id, match) for match in (evidence_matches or [])[:5]]
+    scientific_studies = scientific_studies or {}
+    records = [record for record in scientific_studies.get("records", []) if record.get("evidence_role") != "excluded_irrelevant"]
+    counts = scientific_studies.get("match_counts", {})
+    science_citations = [scientific_citation(record) for record in records[:8]]
     modern = (
-        f"{len(document_citations)} relevant passage(s) were retrieved from case documents. They remain user-supplied and require critical appraisal."
+        f"{len(records)} relevant scientific record(s) were retained after active-ingredient matching; {counts.get('direct_product', 0)} directly match the product, dose, population, endpoints and formulation."
+        if records
+        else f"{len(document_citations)} relevant passage(s) were retrieved from case documents. They remain user-supplied and require critical appraisal."
         if document_citations
         else "Some study language appears in the case description; individual studies still require appraisal."
         if _contains(text, ["study", "trial", "clinical"])
@@ -360,9 +430,9 @@ def build_evidence(case: Any, evidence_matches: list[dict[str, Any]] | None = No
             "confidence": 0.68 if case.classical_formulation else 0.25,
         },
         "modern_science": {
-            "status": "documents_retrieved_unappraised" if document_citations else "limited",
+            "status": "ingredient_evidence_only" if records and not counts.get("direct_product") else "direct_evidence_identified" if counts.get("direct_product") else "documents_retrieved_unappraised" if document_citations else "limited",
             "summary": modern,
-            "confidence": 0.52 if document_citations else 0.30,
+            "confidence": 0.52 if records or document_citations else 0.30,
         },
         "safety": {
             "status": "review_required",
@@ -370,14 +440,13 @@ def build_evidence(case: Any, evidence_matches: list[dict[str, Any]] | None = No
             "confidence": 0.22,
         },
         "confidence": {
-            "label": "Moderate retrieval confidence; appraisal pending" if document_citations else "Low pending document review",
+            "label": "Low–Moderate",
             "score": 0.51 if document_citations else 0.31,
-            "basis": (
-                "Relevant case-document passages were retrieved with page/chunk lineage, but authenticity and study quality remain unverified."
-                if document_citations
-                else "No uploaded evidence has been critically appraised in this run."
-            ),
+            "basis": "Ingredient-level human evidence may be available, but exact dose, standardization, population and oral-mucosal formulation matching are incomplete.",
         },
+        "readiness_score": 31,
+        "match_counts": counts,
+        "evidence_layers": scientific_studies.get("evidence_layers", {}),
         "gaps": [
             "Claim-specific efficacy evidence",
             "Batch standardization and analytical methods",
@@ -385,8 +454,7 @@ def build_evidence(case: Any, evidence_matches: list[dict[str, Any]] | None = No
             "Population, dose and duration justification",
         ],
         "citations": [
-            public_citation("us-fda-botanical-drug-guidance"),
-            public_citation("eu-traditional-herbal-medicinal-products"),
+            *science_citations,
             *document_citations,
         ],
     }
@@ -536,6 +604,16 @@ def build_jurisdictions(case: Any) -> list[dict[str, Any]]:
             "citations": ["eu-traditional-herbal-medicinal-products"],
         },
         {
+            "name": "United Kingdom",
+            "selected": "uk" in requested or "united kingdom" in requested or "great britain" in requested,
+            "patent": "UKIPO patentability and prior-art analysis is distinct from regulatory market classification",
+            "tk": "Traditional use can support a THR route while the same disclosure may affect patent novelty",
+            "regulation": "MHRA herbal-medicine/THR or food-supplement route depends on intended purpose and claims",
+            "evidence": "Exact product evidence is distinct from traditional-use eligibility and authorised food health claims",
+            "market_entry": "High",
+            "citations": ["uk-mhra-traditional-herbal-registration", "uk-food-health-claims"],
+        },
+        {
             "name": "United States",
             "selected": "us" in requested or "usa" in requested or "united states" in requested,
             "patent": "USPTO search and eligibility/novelty analysis required",
@@ -633,6 +711,37 @@ def build_challenges(
     return challenges
 
 
+def build_decision_brief(case: Any, specific: dict[str, Any], classification: dict[str, Any]) -> dict[str, Any]:
+    metadata = case.metadata_json or {}
+    ingredient = (case.ingredients or ["Botanical active"])[0]
+    delivery = str(metadata.get("delivery_mechanism") or case.product_form or "Submitted delivery format")
+    dose = str(metadata.get("dose") or "Proposed dose")
+    standardization = str(metadata.get("standardization") or "Standardization not supplied")
+    studies = specific.get("scientific_studies", {}).get("match_counts", {})
+    return {
+        "strongest_protectable_element": delivery,
+        "highest_tk_risk": f"{ingredient} + the submitted cognitive/traditional-use claim",
+        "largest_scientific_gap": f"No direct exact-product study identified; dose-matched {studies.get('dose_matched', 0)}, formulation-matched {studies.get('formulation_matched', 0)}.",
+        "regulatory_status": classification["label"],
+        "abs_status": "Resource provenance captured; legal applicability review still required",
+        "most_important_next_step": "Complete a feature-level patent-family and independent-claim comparison for the botanical + oral-spray + phospholipid architecture.",
+        "known": [
+            f"{ingredient} is the submitted active botanical",
+            f"Standardization supplied: {standardization}",
+            f"Dose supplied: {dose}",
+            f"Delivery architecture supplied: {delivery}",
+            f"Target markets supplied: {' + '.join(case.target_markets or ['not specified'])}",
+        ],
+        "not_established": [
+            "Exact patent novelty or freedom to operate",
+            "Efficacy of the exact formulation and dose",
+            "Final product classification",
+            "Verified exact traditional-knowledge source linkage",
+            "Final ABS obligation",
+        ],
+    }
+
+
 def analyze_case(
     case: Any,
     evidence_matches: list[dict[str, Any]] | None = None,
@@ -645,11 +754,11 @@ def analyze_case(
         "chunk_count": 0,
     }
     classification = classify_product(case)
-    risks = build_risks(case)
     ip_strategy = build_ip_strategy(case)
     challenges = build_challenges(case, evidence_matches)
     external_research = run_external_research(case)
     specific = build_case_specific_analysis(case, evidence_matches, external_research)
+    risks = build_risks(case, specific)
     claim_graph = build_claim_evidence_graph(classification, risks, challenges)
     design_around = build_specific_design_around(
         case,
@@ -685,18 +794,18 @@ def analyze_case(
         )
     patent_status = specific["patent_landscape"].get("status", "not run")
     completeness = specific["input_completeness"]
-    scientific_evidence = build_evidence(case, evidence_matches)
+    scientific_evidence = build_evidence(case, evidence_matches, specific["scientific_studies"])
     scientific_evidence["study_matrix"] = specific["scientific_studies"]
     scientific_evidence["traditional_knowledge_records"] = specific["traditional_knowledge"]["records"]
     result = {
         "case": {"id": case.id, "title": case.title, "status": "analyzed"},
         "executive_summary": (
-            f"The case contains {completeness['supplied_count']} of {completeness['required_count']} decision-critical facts "
-            f"({completeness['score']}%). Patent research status is {patent_status.replace('_', ' ')}. "
-            "Recommendations below are tied to submitted quantities, extract, release and process facts where available; "
-            "missing facts remain explicit rather than being filled with assumptions."
+            f"{completeness['supplied_count']}/{completeness['required_count']} intake fields completed. "
+            f"External verification remains incomplete for prior art, regulatory classification and scientific evidence; patent research status is {patent_status.replace('_', ' ')}. "
+            "Submitted quantities, extract, delivery and process facts are preserved, and missing conclusions remain explicit."
         ),
         "classification": classification,
+        "decision_brief": build_decision_brief(case, specific, classification),
         "genome": build_genome(case),
         "risk_cards": risks,
         "knowledge_graph": knowledge_graph,
@@ -716,10 +825,11 @@ def analyze_case(
             "appraisal_status": "human appraisal required",
         },
         "next_actions": [
-            "Freeze the quantitative formulation, intended use, dose, delivery and claims.",
-            "Complete patent, non-patent and traditional-knowledge searches with a qualified professional.",
-            "Create a resource provenance and ABS screening record.",
-            "Build a claim-to-evidence matrix and quality/safety gap plan.",
+            "Finalize exact claim wording and intended market positioning.",
+            "Complete the botanical + oral-spray + phospholipid-delivery prior-art and independent-claim search.",
+            "Verify biological-resource provenance and ABS applicability.",
+            "Build a claim-to-evidence matrix for each proposed cognitive outcome.",
+            "Compare India and UK regulatory pathways before final label and marketing claims.",
         ],
         "confidence": {
             "score": round(min(0.82, 0.35 + completeness["score"] / 250 + (0.08 if evidence_matches else 0)), 2),
@@ -740,9 +850,87 @@ def analyze_case(
     return result
 
 
+def classify_question_intent(question: str) -> str:
+    normalized = question.lower()
+    if _contains(normalized, ["legally market", "lawful claim", "regulatory", "classification", "label", "license", "licence"]):
+        return "REGULATORY"
+    if _contains(normalized, ["human evidence", "clinical evidence", "scientific evidence", "efficacy", "study", "studies", "trial", "dose", "formulation", "memory", "attention", "cognitive", "safety", "tolerability"]):
+        return "SCIENTIFIC_EVIDENCE"
+    if _contains(normalized, ["patent", "novel", "inventive", "prior art", "claim overlap"]):
+        return "PATENT"
+    if _contains(normalized, ["traditional knowledge", "tkdl", "classical", "prior use"]):
+        return "TRADITIONAL_KNOWLEDGE"
+    if _contains(normalized, ["abs", "biological resource", "biodiversity", "provenance"]):
+        return "ABS"
+    return "GENERAL"
+
+
+def answer_scientific_question(case: Any, question: str, analysis: dict[str, Any]) -> dict[str, Any]:
+    studies = analysis.get("case_specific_analysis", {}).get("scientific_studies", {})
+    counts = studies.get("match_counts", {})
+    records = [record for record in studies.get("records", []) if record.get("evidence_role") != "excluded_irrelevant"]
+    metadata = case.metadata_json or {}
+    ingredient = (case.ingredients or ["the submitted botanical"])[0]
+    dose = str(metadata.get("dose") or metadata.get("quantitative_composition") or "the submitted dose").rstrip(". ")
+    formulation = str(metadata.get("delivery_mechanism") or case.product_form or "the submitted formulation")
+    claim = str(metadata.get("proposed_claim") or case.intended_use or question)
+    direct = counts.get("direct_product", 0)
+    ingredient_level = counts.get("ingredient_level", 0)
+    conclusion = "NOT ESTABLISHED FOR THE EXACT PRODUCT"
+    ingredient_status = "AVAILABLE" if ingredient_level else "NOT IDENTIFIED"
+    answer = (
+        f"Current conclusion: {conclusion}.\n\n"
+        f"The retrieved literature provides {ingredient_status.lower()} ingredient-level human evidence for {ingredient}, "
+        f"but it does not establish the complete claim — ‘{claim}’ — for {dose} delivered as {formulation}.\n\n"
+        "Claim-level assessment\n"
+        f"• Ingredient-level human evidence: {ingredient_level} matched record(s).\n"
+        f"• Healthy-population match: {counts.get('population_matched', 0)} record(s).\n"
+        f"• Endpoint match: {counts.get('endpoint_matched', 0)} record(s); memory, attention and broad cognitive performance must each be supported.\n"
+        f"• Dose match: {counts.get('dose_matched', 0)} record(s); materially different exposure is indirect evidence.\n"
+        f"• Formulation match: {counts.get('formulation_matched', 0)} record(s); spray/phospholipid benefits cannot be assumed from capsules or tablets.\n"
+        f"• Direct exact-product evidence: {direct} record(s).\n\n"
+        "Evidence status: PARTIALLY SUPPORTED AT INGREDIENT LEVEL / FORMULATION-SPECIFIC EVIDENCE MISSING. "
+        "The claim is not yet claim-ready for this exact product. Traditional use is assessed separately and is not clinical proof."
+    )
+    citations = [scientific_citation(record) for record in records[:8]]
+    return {
+        "answer": answer,
+        "claim_type": "interpretation" if citations else "unsupported",
+        "confidence": 0.52 if citations else 0.24,
+        "confidence_label": "Low–Moderate" if citations else "Low",
+        "confidence_basis": "Ingredient-level human evidence may exist, but exact dose, population, endpoint and formulation matching are incomplete.",
+        "intent": "SCIENTIFIC_EVIDENCE",
+        "evidence_summary": {
+            "direct_evidence": direct,
+            "ingredient_level_human_evidence": ingredient_level,
+            "dose_matched_evidence": counts.get("dose_matched", 0),
+            "formulation_matched_evidence": counts.get("formulation_matched", 0),
+            "population_matched_evidence": counts.get("population_matched", 0),
+            "endpoint_matched_evidence": counts.get("endpoint_matched", 0),
+        },
+        "methodology": [
+            "Scientific-evidence intent selected; legal and regulatory sources excluded.",
+            "Clinical retrieval requires the active botanical and ranks ingredient, population, endpoint, quality, dose and formulation matches.",
+            "PMC full text is appraised when available; abstract-only records remain screening leads.",
+        ],
+        "citations": citations,
+        "requires_human_review": True,
+        "limitations": [
+            DISCLAIMER,
+            "This is a claim-level evidence screen, not a systematic review, medical recommendation or marketing authorization.",
+        ],
+    }
+
+
 def answer_question(
-    case: Any, question: str, evidence_matches: list[dict[str, Any]] | None = None
+    case: Any,
+    question: str,
+    evidence_matches: list[dict[str, Any]] | None = None,
+    analysis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    intent = classify_question_intent(question)
+    if intent == "SCIENTIFIC_EVIDENCE" and analysis:
+        return answer_scientific_question(case, question, analysis)
     normalized = re.sub(r"[^a-z0-9\s-]", " ", question.lower())
     scored: list[tuple[int, dict[str, Any]]] = []
     tokens = {token for token in normalized.split() if len(token) > 2}
@@ -759,6 +947,11 @@ def answer_question(
             "answer": "The curated source registry does not contain enough directly relevant material to answer this reliably. Add the relevant document or request expert review rather than treating a generated response as authority.",
             "claim_type": "unsupported",
             "confidence": 0.12,
+            "confidence_label": "Low",
+            "confidence_basis": "No sufficiently relevant primary or case-document source was retrieved.",
+            "intent": intent,
+            "evidence_summary": None,
+            "methodology": ["Hybrid retrieval with safe abstention."],
             "citations": [],
             "requires_human_review": True,
             "limitations": [
@@ -782,6 +975,11 @@ def answer_question(
         "answer": answer,
         "claim_type": "interpretation",
         "confidence": min(0.82, 0.50 + 0.06 * len(matches) + 0.04 * len(evidence_matches)),
+        "confidence_label": "Moderate",
+        "confidence_basis": "Relevant primary and case-document sources were retrieved, but human interpretation remains required.",
+        "intent": intent,
+        "evidence_summary": None,
+        "methodology": ["Hybrid lexical and neural retrieval with reranking."],
         "citations": [
             *[public_citation(source["id"]) for source in matches],
             *[evidence_citation(case.id, match) for match in evidence_matches[:3]],

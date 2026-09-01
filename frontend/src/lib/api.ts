@@ -44,7 +44,7 @@ export type Citation = {
   support_status: string;
   excerpt: string;
   locator?: string | null;
-  source_type?: "official" | "case_document";
+  source_type?: "official" | "case_document" | "scientific_literature";
   content_sha256?: string | null;
   retrieval_score?: number | null;
   lexical_score?: number | null;
@@ -61,6 +61,13 @@ export type RiskCard = {
   score: number;
   level: string;
   summary: string;
+  display_value?: string;
+  score_is_probability?: boolean;
+  primary_finding?: string;
+  positive_signals?: string[];
+  negative_signals?: string[];
+  missing_evidence?: string[];
+  what_changes_score?: string[];
   claim_type?: "inference";
   citations?: Citation[];
 };
@@ -73,7 +80,20 @@ export type AnalysisResult = {
     pathway: string;
     confidence: number;
     requires_human_review: boolean;
+    status?: string;
+    candidate_pathways?: string[];
+    decision_factors?: string[];
     citations: Citation[];
+  };
+  decision_brief: {
+    strongest_protectable_element: string;
+    highest_tk_risk: string;
+    largest_scientific_gap: string;
+    regulatory_status: string;
+    abs_status: string;
+    most_important_next_step: string;
+    known: string[];
+    not_established: string[];
   };
   genome: {
     nodes: Array<{
@@ -107,6 +127,9 @@ export type AnalysisResult = {
     modern_science: EvidenceSection;
     safety: EvidenceSection;
     confidence: { label: string; score: number; basis: string };
+    readiness_score?: number;
+    match_counts?: Record<string, number>;
+    evidence_layers?: Record<string, string>;
     gaps: string[];
     citations: Citation[];
     study_matrix?: ScientificStudyCollection;
@@ -326,6 +349,19 @@ type ScientificStudy = {
   section_locators?: Record<string, string | null>;
   locator?: string | null;
   source_status: string;
+  evidence_role?: "direct_product" | "ingredient_clinical" | "delivery_system" | "excluded_irrelevant";
+  match_score?: number;
+  match_profile?: {
+    ingredient: boolean;
+    population: boolean;
+    endpoint: boolean;
+    dose: boolean;
+    standardization: boolean;
+    formulation: boolean;
+    endpoint_hits: string[];
+    formulation_hits: string[];
+    quality: string;
+  };
 };
 
 type ScientificStudyCollection = {
@@ -339,6 +375,8 @@ type ScientificStudyCollection = {
   full_text_appraised_count?: number;
   abstract_only_count?: number;
   notice?: string;
+  match_counts?: Record<string, number>;
+  evidence_layers?: Record<string, string>;
 };
 
 type EvidenceSection = {
@@ -364,6 +402,11 @@ export type AskResponse = {
   output_translation: TranslationInfo;
   claim_type: "legal_fact" | "interpretation" | "inference" | "unsupported";
   confidence: number;
+  confidence_label: string;
+  confidence_basis: string;
+  intent: string;
+  evidence_summary: Record<string, number> | null;
+  methodology: string[];
   citations: Citation[];
   requires_human_review: boolean;
   limitations: string[];
