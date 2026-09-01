@@ -1,0 +1,204 @@
+IP-SAKTI 360 — DEMO VIDEO SCRIPT
+Target duration: 2 minutes 58 seconds
+
+PUBLIC WEBSITE
+https://ip-sakti-sahayak-xi.vercel.app
+
+BEFORE RECORDING
+1. Open the public website once and let it warm up.
+2. Prepare the text snippets below for quick copy and paste.
+3. Record at 1080p with browser zoom around 80–90%.
+4. Hide notifications, bookmarks and private browser tabs.
+5. Keep only two seconds of the analysis loading screen in the final edit.
+
+============================================================
+0:00–0:25 — HOMEPAGE AND IDEA ENTRY
+============================================================
+
+SCREEN ACTION
+Open the public website and click inside “Tell us about your product...”
+
+NARRATION
+“Developing an Ayurvedic innovation requires checking traditional knowledge,
+patentability, scientific evidence, regulation and biological-resource
+obligations. IP-SAKTI 360 brings these decisions into one evidence-grounded
+workspace.”
+
+TYPE OR PASTE
+BrahmiQ Bacopa Oral-Mucosal Spray. A metered-dose oral spray containing standardized Bacopa monnieri extract with 50% total bacosides, delivering 150 mg per day through a 2% phosphatidylcholine delivery system. The proposed claim is “supports memory, attention and cognitive performance in healthy adults.” Bacopa is cultivated and sourced through a registered supplier in Kerala, India. Target markets are India and the United Kingdom. This is not a classical formulation.
+
+SCREEN ACTION
+Click “Explore my idea →”.
+
+============================================================
+0:25–0:52 — STRUCTURED INNOVATION DETAILS
+============================================================
+
+NARRATION
+“The innovator can now add the technical facts that materially affect
+patentability, classification and evidence matching.”
+
+INGREDIENTS — ONE PER LINE
+Bacopa monnieri standardized extract
+Phosphatidylcholine
+Glycerol
+Xylitol
+Purified water
+Natural mint flavour
+
+PRODUCT FORM
+Metered-dose oral-mucosal spray
+
+TARGET MARKETS
+India, United Kingdom
+
+INTENDED USE / CLAIM
+Supports memory, attention and cognitive performance in healthy adults.
+
+SCREEN ACTION
+Click “Add sourcing and technical details ↓”.
+
+QUANTITATIVE COMPOSITION
+Bacopa extract 150 mg per daily dose; phosphatidylcholine 2% w/v; glycerol 5% w/v; xylitol 3% w/v.
+
+STANDARDIZATION / FINGERPRINT
+50% total bacosides with bacoside A as the primary HPLC marker.
+
+EXTRACTION RATIO AND SOLVENT
+Bacopa aerial-part extract, DER 8:1, using 60% hydroethanolic extraction.
+
+DOSE, FREQUENCY AND DURATION
+Two metered sprays twice daily for up to 12 weeks.
+
+RELEASE / PERFORMANCE PROFILE
+Target at least 80% active release within 20 minutes.
+
+CRITICAL PROCESS PARAMETERS
+pH 5.5–6.5; temperature below 35°C; spray volume 0.15 mL ±10%.
+
+EXACT PROPOSED CLAIM
+Supports memory, attention and cognitive performance in healthy adults when used daily.
+
+BIOLOGICAL-RESOURCE SOURCING
+Cultivated Bacopa sourced through a registered supplier in Kerala, India, with supplier, batch and collection records.
+
+MANUFACTURING / TECHNICAL PROCESS
+Incorporate the standardized Bacopa extract into a phospholipid dispersion under controlled shear and pH, then filter and fill into calibrated metered-dose spray containers.
+
+BRAND / PRODUCT NAME
+BrahmiQ
+
+SCREEN ACTION
+Leave “Derived from a classical formulation” unchecked.
+Click “Analyze innovation →”.
+Show approximately two seconds of the loading animation, then cut to the
+completed result after it genuinely finishes.
+
+============================================================
+0:52–1:18 — ANALYSIS WORKSPACE
+============================================================
+
+NARRATION
+“IP-SAKTI decomposes the invention into an Innovation Genome covering its
+ingredient, traditional use, delivery mechanism, manufacturing process,
+claimed effect and brand. It then produces explainable screening results
+instead of one unsupported answer.
+
+For BrahmiQ, Bacopa’s cognitive use has high traditional-knowledge exposure,
+while the metered phospholipid spray architecture is the strongest potential
+protection area.”
+
+SCREEN ACTION
+Point to the Innovation Genome and the screening cards.
+
+============================================================
+1:18–1:40 — DASHBOARD
+============================================================
+
+SCREEN ACTION
+Open “Dashboard”. Scroll to the case decision brief and screening cards.
+
+NARRATION
+“The dashboard immediately answers what is potentially protectable, what is
+exposed and what remains unresolved. Each score is an internal screening
+index—not a probability—and can be opened to inspect its evidence, positive
+signals, weaknesses and missing information.”
+
+SCREEN ACTION
+Briefly open “Patent Screening”.
+
+============================================================
+1:40–1:58 — TRADITIONAL KNOWLEDGE
+============================================================
+
+SCREEN ACTION
+Open “Traditional Knowledge”.
+
+NARRATION
+“The knowledge graph separates the traditional Bacopa cognitive use from
+potentially modern features such as the metered spray and phospholipid
+carrier. Unverified TKDL or classical-source linkages remain clearly marked
+for human verification.”
+
+============================================================
+1:58–2:16 — SCIENTIFIC EVIDENCE
+============================================================
+
+SCREEN ACTION
+Open “Scientific Evidence”. Point to the evidence-match counts and a study.
+
+NARRATION
+“PubMed and PMC evidence is assessed against the actual product.
+Ingredient-level human evidence exists, but the system identifies zero
+dose-matched and formulation-matched studies for this exact 150-milligram
+oral spray. Traditional use is never treated as clinical proof.”
+
+============================================================
+2:16–2:32 — CHALLENGE MY INNOVATION
+============================================================
+
+SCREEN ACTION
+Open “Challenge My Innovation”. Switch between “Patent Examiner” and
+“Scientific Evidence Reviewer”.
+
+NARRATION
+“The adversarial-review workspace simulates patent, regulatory, ABS and
+scientific reviewers. It identifies likely objections, missing evidence and
+concrete corrective actions before filing or market entry.”
+
+============================================================
+2:32–2:43 — JURISDICTION COMPARISON
+============================================================
+
+SCREEN ACTION
+Open “Jurisdiction Compare”.
+
+NARRATION
+“India, the UK, EU and US can be compared side by side without losing the
+invention context.”
+
+============================================================
+2:43–2:58 — ASK IP-SAKTI AND CLOSING
+============================================================
+
+SCREEN ACTION
+Open “Ask IP-SAKTI”.
+
+TYPE OR PASTE
+Does the available human evidence support the exact claim “supports memory, attention and cognitive performance in healthy adults” at this dose and formulation?
+
+SCREEN ACTION
+Click “Ask →”. Keep the answer and Live Evidence Panel visible.
+
+NARRATION
+“The question is routed only to the scientific pipeline. The answer concludes
+that the exact product claim is not established, explains every evidence
+match and gap, and exposes its supporting citations in the Live Evidence
+Panel.
+
+IP-SAKTI 360 turns Ayurvedic innovation into a traceable, evidence-aware
+decision process.”
+
+END FRAME
+Keep the claim-level conclusion, evidence-match counts and scientific citations
+visible. End immediately after the final sentence.
