@@ -22,7 +22,6 @@ WITH candidates AS (
   SELECT
     publication_number,
     title,
-    abstract,
     url,
     country,
     publication_description,
@@ -45,21 +44,11 @@ WITH candidates AS (
 SELECT
   candidate.publication_number,
   candidate.title,
-  candidate.abstract,
   candidate.url,
   candidate.country,
   candidate.publication_description,
   candidate.term_hits,
-  publication.family_id,
-  ARRAY_TO_STRING(
-    ARRAY(
-      SELECT localized.text
-      FROM UNNEST(publication.claims_localized) AS localized
-      WHERE localized.language = 'en'
-      LIMIT 1
-    ),
-    ' '
-  ) AS claims_text
+  publication.family_id
 FROM candidates AS candidate
 LEFT JOIN `{GOOGLE_PATENTS_PUBLICATIONS_TABLE}` AS publication
   USING (publication_number)
@@ -140,23 +129,6 @@ def _bigquery_terms(case: Any) -> tuple[str, ...]:
     return tuple(dict.fromkeys(term for term in ordered if len(term) >= 4))[:8]
 
 
-def _split_patent_claims(value: str | None, limit: int = 5) -> list[dict[str, str]]:
-    text = _clean(value or "")
-    if not text:
-        return []
-    boundaries = list(re.finditer(r"(?:^|\s)(\d{1,3})[.)]\s+(?=[A-Z])", text))
-    if not boundaries:
-        return [{"claim": "1", "text": text[:1_500]}]
-    claims = []
-    for index, boundary in enumerate(boundaries[:limit]):
-        start = boundary.end()
-        end = boundaries[index + 1].start() if index + 1 < len(boundaries) else len(text)
-        claim_text = text[start:end].strip()
-        if claim_text:
-            claims.append({"claim": boundary.group(1), "text": claim_text[:1_500]})
-    return claims
-
-
 @lru_cache(maxsize=32)
 def _query_google_patents(
     project: str,
@@ -199,7 +171,7 @@ def search_google_patents_bigquery(case: Any, query: dict[str, str]) -> dict[str
         "records": [],
         "family_count": 0,
         "search_url": search_url,
-        "coverage_note": "Worldwide family metadata; English claim text is available primarily for US publications.",
+        "coverage_note": "Worldwide discovery metadata and simple-family identifiers; claim text is not retrieved by the bounded default query.",
     }
     if not settings.google_cloud_project:
         return {
@@ -228,8 +200,7 @@ def search_google_patents_bigquery(case: Any, query: dict[str, str]) -> dict[str
                 "docdb": row.get("publication_number"),
                 "family_id": row.get("family_id"),
                 "title": row.get("title") or row.get("publication_number") or "Untitled patent",
-                "abstract_excerpt": _clean(row.get("abstract") or "")[:700],
-                "claims": _split_patent_claims(row.get("claims_text")),
+                "claims": [],
                 "url": row.get("url") or f"https://patents.google.com/patent/{str(row.get('publication_number') or '').replace('-', '')}",
                 "source": "Google Patents BigQuery public dataset",
                 "country": row.get("country"),
@@ -240,14 +211,14 @@ def search_google_patents_bigquery(case: Any, query: dict[str, str]) -> dict[str
         ]
         return {
             **base,
-            "status": "live" if records else "no_results",
+            "status": "family_live_claims_not_retrieved" if records else "no_results",
             "records": records,
             "family_count": len({item["family_id"] or item["publication_number"] for item in records}),
             "dataset_modified_at": dataset_modified_at,
             "bytes_billed": bytes_billed,
             "limitation": (
-                "This is a bounded keyword/top-term screening query, not a comprehensive novelty or freedom-to-operate search. "
-                "Verify family members, legal status and every relevant claim in current patent-office records."
+                "This bounded query retrieves candidate publications and simple-family identifiers without scanning the costly full-claim column. "
+                "Open each candidate to verify current family members, legal status and claim text; no claim-level conclusion is asserted."
             ),
         }
     except Exception as exc:

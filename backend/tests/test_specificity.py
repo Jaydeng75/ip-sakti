@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from services import research
-from services.research import _bigquery_terms, _parse_pubmed, _split_patent_claims, build_research_query
+from services.research import _bigquery_terms, _parse_pubmed, build_research_query
 from services.specificity import build_case_specific_analysis, build_specific_design_around
 
 
@@ -94,17 +94,11 @@ def test_research_query_uses_ingredient_or_group():
     assert '"and"[Title/Abstract]' not in query["pubmed"]
 
 
-def test_bigquery_query_terms_and_claim_parser_preserve_searchable_detail():
+def test_bigquery_query_terms_preserve_searchable_detail():
     terms = _bigquery_terms(detailed_case())
-    claims = _split_patent_claims(
-        "1. A controlled-release tablet comprising Withania somnifera. "
-        "2. The tablet of claim 1 comprising five percent withanolides."
-    )
 
     assert "withania somnifera" in terms
     assert "withanolides" in terms
-    assert [claim["claim"] for claim in claims] == ["1", "2"]
-    assert "controlled-release" in claims[0]["text"]
 
 
 def test_bigquery_provider_maps_family_and_claim_results(monkeypatch):
@@ -118,8 +112,6 @@ def test_bigquery_provider_maps_family_and_claim_results(monkeypatch):
                     "publication_number": "US-123-A1",
                     "family_id": "family-7",
                     "title": "Botanical release tablet",
-                    "abstract": "A measured-release botanical composition.",
-                    "claims_text": "1. A tablet comprising Withania somnifera. 2. The tablet of claim 1 with a coating.",
                     "url": "https://patents.google.com/patent/US123A1/en",
                     "country": "United States",
                     "publication_description": "Application",
@@ -133,8 +125,8 @@ def test_bigquery_provider_maps_family_and_claim_results(monkeypatch):
 
     result = research.search_google_patents_bigquery(detailed_case(), build_research_query(detailed_case()))
 
-    assert result["status"] == "live"
+    assert result["status"] == "family_live_claims_not_retrieved"
     assert result["family_count"] == 1
-    assert result["records"][0]["claims"][1]["claim"] == "2"
+    assert result["records"][0]["claims"] == []
     assert result["dataset_modified_at"].startswith("2026-08-31")
     assert result["bytes_billed"] == 12_345

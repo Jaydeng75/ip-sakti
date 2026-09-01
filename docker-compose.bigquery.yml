@@ -1,0 +1,10 @@
+services:
+  backend:
+    environment:
+      IPSAKTI_PATENT_SEARCH_PROVIDER: ${IPSAKTI_PATENT_SEARCH_PROVIDER:-google_bigquery}
+      IPSAKTI_GOOGLE_CLOUD_PROJECT: ${IPSAKTI_GOOGLE_CLOUD_PROJECT:?Set a Google Cloud billing project}
+      IPSAKTI_BIGQUERY_LOCATION: ${IPSAKTI_BIGQUERY_LOCATION:-US}
+      IPSAKTI_BIGQUERY_MAXIMUM_BYTES_BILLED: ${IPSAKTI_BIGQUERY_MAXIMUM_BYTES_BILLED:-100000000000}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google/application_default_credentials.json
+    volumes:
+      - ${GOOGLE_ADC_FILE:?Set the host ADC file path}:/run/secrets/google/application_default_credentials.json:ro
