@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     registration_enabled: bool = True
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
-    corpus_version: str = "2026-09-01.official-registry.3"
+    corpus_version: str = "2026-09-01.official-registry.4"
     embedding_provider: str = "deterministic"
     embedding_url: str = "http://localhost:8081/v1"
     embedding_api_key: str | None = None
@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     external_research_max_results: int = 5
     ncbi_api_key: str | None = None
     ncbi_contact_email: str | None = None
+    patent_search_provider: str = "auto"
+    google_cloud_project: str | None = None
+    bigquery_location: str = "US"
+    bigquery_maximum_bytes_billed: int = 100_000_000_000
     epo_ops_consumer_key: str | None = None
     epo_ops_consumer_secret: str | None = None
     otel_enabled: bool = False

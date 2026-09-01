@@ -260,6 +260,9 @@ type PatentLandscape = {
   family_count: number;
   search_url: string;
   limitation?: string;
+  coverage_note?: string;
+  dataset_modified_at?: string | null;
+  bytes_billed?: number | null;
 };
 
 type TraditionalKnowledgeRecord = {

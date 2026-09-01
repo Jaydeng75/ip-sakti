@@ -113,8 +113,27 @@ def validate_runtime() -> None:
             raise RuntimeError("IPSAKTI_EXTERNAL_RESEARCH_ENABLED must be true in production.")
         if not settings.ncbi_contact_email:
             raise RuntimeError("IPSAKTI_NCBI_CONTACT_EMAIL is required for production PubMed research.")
-        if not settings.epo_ops_consumer_key or not settings.epo_ops_consumer_secret:
-            raise RuntimeError("EPO OPS consumer credentials are required for production patent-family research.")
+        patent_provider = settings.patent_search_provider.lower()
+        if patent_provider not in {"auto", "google_bigquery", "epo_ops"}:
+            raise RuntimeError("IPSAKTI_PATENT_SEARCH_PROVIDER must be auto, google_bigquery or epo_ops.")
+        bigquery_ready = bool(settings.google_cloud_project)
+        epo_ready = bool(settings.epo_ops_consumer_key and settings.epo_ops_consumer_secret)
+        if patent_provider == "google_bigquery" and not bigquery_ready:
+            raise RuntimeError("IPSAKTI_GOOGLE_CLOUD_PROJECT is required for Google BigQuery patent research.")
+        if patent_provider == "epo_ops" and not epo_ready:
+            raise RuntimeError("EPO OPS consumer credentials are required when the EPO provider is selected.")
+        if patent_provider == "auto" and not (bigquery_ready or epo_ready):
+            raise RuntimeError("Configure a Google Cloud billing project or EPO OPS credentials for patent research.")
+        if bigquery_ready and patent_provider in {"auto", "google_bigquery"}:
+            try:
+                import google.auth
+
+                google.auth.default(quota_project_id=settings.google_cloud_project)
+            except Exception as exc:
+                if patent_provider == "google_bigquery" or not epo_ready:
+                    raise RuntimeError(
+                        "Google Application Default Credentials are required for BigQuery patent research."
+                    ) from exc
 
 
 def bootstrap_admin() -> None:

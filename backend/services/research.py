@@ -13,7 +13,59 @@ logger = logging.getLogger("ip-sakti.research")
 EPO_BASE = "https://ops.epo.org/3.2/rest-services"
 EPO_TOKEN_URL = "https://ops.epo.org/3.2/auth/accesstoken"
 NCBI_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+GOOGLE_PATENTS_RESEARCH_TABLE = "patents-public-data.google_patents_research.publications"
+GOOGLE_PATENTS_PUBLICATIONS_TABLE = "patents-public-data.patents.publications"
 WORD_RE = re.compile(r"[A-Za-z][A-Za-z-]{2,}")
+
+GOOGLE_PATENTS_SQL = f"""
+WITH candidates AS (
+  SELECT
+    publication_number,
+    title,
+    abstract,
+    url,
+    country,
+    publication_description,
+    (
+      SELECT COUNT(*)
+      FROM UNNEST(top_terms) AS top_term
+      CROSS JOIN UNNEST(@terms) AS query_term
+      WHERE STRPOS(LOWER(top_term), query_term) > 0
+    ) AS term_hits
+  FROM `{GOOGLE_PATENTS_RESEARCH_TABLE}`
+  WHERE EXISTS (
+    SELECT 1
+    FROM UNNEST(top_terms) AS top_term
+    CROSS JOIN UNNEST(@terms) AS query_term
+    WHERE STRPOS(LOWER(top_term), query_term) > 0
+  )
+  ORDER BY term_hits DESC, publication_number DESC
+  LIMIT @candidate_limit
+)
+SELECT
+  candidate.publication_number,
+  candidate.title,
+  candidate.abstract,
+  candidate.url,
+  candidate.country,
+  candidate.publication_description,
+  candidate.term_hits,
+  publication.family_id,
+  ARRAY_TO_STRING(
+    ARRAY(
+      SELECT localized.text
+      FROM UNNEST(publication.claims_localized) AS localized
+      WHERE localized.language = 'en'
+      LIMIT 1
+    ),
+    ' '
+  ) AS claims_text
+FROM candidates AS candidate
+LEFT JOIN `{GOOGLE_PATENTS_PUBLICATIONS_TABLE}` AS publication
+  USING (publication_number)
+ORDER BY candidate.term_hits DESC, candidate.publication_number DESC
+LIMIT @result_limit
+"""
 
 
 def _clean(value: str) -> str:
@@ -63,6 +115,150 @@ def build_research_query(case: Any) -> dict[str, str]:
         "patent_display": " + ".join(patent_terms),
         "pubmed": pubmed_query,
     }
+
+
+def _bigquery_terms(case: Any) -> tuple[str, ...]:
+    ingredients = [_clean(_latin_name(item)).lower() for item in (case.ingredients or [])[:3]]
+    metadata = case.metadata_json or {}
+    technical_text = " ".join(
+        str(value)
+        for value in [
+            case.product_form or "",
+            metadata.get("delivery_mechanism", ""),
+            metadata.get("standardization", ""),
+            metadata.get("release_profile", ""),
+            metadata.get("extraction_ratio", ""),
+        ]
+        if value
+    )
+    technical_tokens = [
+        token.lower()
+        for token in WORD_RE.findall(technical_text)
+        if len(token) >= 5 and token.lower() not in {"extract", "tablet", "capsule", "release"}
+    ]
+    ordered = [*ingredients, *technical_tokens]
+    return tuple(dict.fromkeys(term for term in ordered if len(term) >= 4))[:8]
+
+
+def _split_patent_claims(value: str | None, limit: int = 5) -> list[dict[str, str]]:
+    text = _clean(value or "")
+    if not text:
+        return []
+    boundaries = list(re.finditer(r"(?:^|\s)(\d{1,3})[.)]\s+(?=[A-Z])", text))
+    if not boundaries:
+        return [{"claim": "1", "text": text[:1_500]}]
+    claims = []
+    for index, boundary in enumerate(boundaries[:limit]):
+        start = boundary.end()
+        end = boundaries[index + 1].start() if index + 1 < len(boundaries) else len(text)
+        claim_text = text[start:end].strip()
+        if claim_text:
+            claims.append({"claim": boundary.group(1), "text": claim_text[:1_500]})
+    return claims
+
+
+@lru_cache(maxsize=32)
+def _query_google_patents(
+    project: str,
+    location: str,
+    terms: tuple[str, ...],
+    result_limit: int,
+    maximum_bytes_billed: int,
+) -> tuple[tuple[dict[str, Any], ...], str | None, int | None]:
+    from google.cloud import bigquery
+
+    client = bigquery.Client(project=project, location=location)
+    job_config = bigquery.QueryJobConfig(
+        maximum_bytes_billed=maximum_bytes_billed,
+        query_parameters=[
+            bigquery.ArrayQueryParameter("terms", "STRING", list(terms)),
+            bigquery.ScalarQueryParameter("candidate_limit", "INT64", max(result_limit * 5, 25)),
+            bigquery.ScalarQueryParameter("result_limit", "INT64", result_limit),
+        ],
+    )
+    query_job = client.query(GOOGLE_PATENTS_SQL, job_config=job_config, location=location)
+    try:
+        rows = tuple(dict(row.items()) for row in query_job.result(timeout=settings.external_research_timeout_seconds))
+    except Exception:
+        query_job.cancel()
+        raise
+    modified = None
+    try:
+        table = client.get_table(GOOGLE_PATENTS_RESEARCH_TABLE)
+        modified = table.modified.isoformat() if table.modified else None
+    except Exception as exc:
+        logger.info("Google Patents table metadata unavailable error=%s", type(exc).__name__)
+    return rows, modified, query_job.total_bytes_billed
+
+
+def search_google_patents_bigquery(case: Any, query: dict[str, str]) -> dict[str, Any]:
+    search_url = f"https://patents.google.com/?q={quote_plus(query['patent_display'])}"
+    base = {
+        "provider": "Google Patents Public Datasets on BigQuery",
+        "query": query["patent_display"],
+        "records": [],
+        "family_count": 0,
+        "search_url": search_url,
+        "coverage_note": "Worldwide family metadata; English claim text is available primarily for US publications.",
+    }
+    if not settings.google_cloud_project:
+        return {
+            **base,
+            "status": "credential_required",
+            "limitation": "Set IPSAKTI_GOOGLE_CLOUD_PROJECT and provide Google Application Default Credentials.",
+        }
+    terms = _bigquery_terms(case)
+    if not terms:
+        return {
+            **base,
+            "status": "insufficient_query",
+            "limitation": "Add botanical identities or technical parameters before running the patent search.",
+        }
+    try:
+        rows, dataset_modified_at, bytes_billed = _query_google_patents(
+            settings.google_cloud_project,
+            settings.bigquery_location,
+            terms,
+            settings.external_research_max_results,
+            settings.bigquery_maximum_bytes_billed,
+        )
+        records = [
+            {
+                "publication_number": row.get("publication_number") or "Unknown publication",
+                "docdb": row.get("publication_number"),
+                "family_id": row.get("family_id"),
+                "title": row.get("title") or row.get("publication_number") or "Untitled patent",
+                "abstract_excerpt": _clean(row.get("abstract") or "")[:700],
+                "claims": _split_patent_claims(row.get("claims_text")),
+                "url": row.get("url") or f"https://patents.google.com/patent/{str(row.get('publication_number') or '').replace('-', '')}",
+                "source": "Google Patents BigQuery public dataset",
+                "country": row.get("country"),
+                "publication_description": row.get("publication_description"),
+                "term_hits": int(row.get("term_hits") or 0),
+            }
+            for row in rows
+        ]
+        return {
+            **base,
+            "status": "live" if records else "no_results",
+            "records": records,
+            "family_count": len({item["family_id"] or item["publication_number"] for item in records}),
+            "dataset_modified_at": dataset_modified_at,
+            "bytes_billed": bytes_billed,
+            "limitation": (
+                "This is a bounded keyword/top-term screening query, not a comprehensive novelty or freedom-to-operate search. "
+                "Verify family members, legal status and every relevant claim in current patent-office records."
+            ),
+        }
+    except Exception as exc:
+        logger.warning("Google Patents BigQuery research unavailable error=%s", type(exc).__name__)
+        return {
+            **base,
+            "status": "unavailable",
+            "limitation": (
+                "The BigQuery request failed or exceeded its configured billing cap; no family or claim-level result is asserted."
+            ),
+        }
 
 
 @lru_cache(maxsize=8)
@@ -290,16 +486,32 @@ def search_pubmed(case: Any, query: dict[str, str]) -> dict[str, Any]:
         }
 
 
+def search_patents(case: Any, query: dict[str, str]) -> dict[str, Any]:
+    provider = settings.patent_search_provider.lower()
+    if provider == "google_bigquery":
+        return search_google_patents_bigquery(case, query)
+    if provider == "epo_ops":
+        return search_epo_patents(case, query)
+    if settings.google_cloud_project:
+        result = search_google_patents_bigquery(case, query)
+        if result["status"] not in {"unavailable", "credential_required"}:
+            return result
+        if settings.epo_ops_consumer_key and settings.epo_ops_consumer_secret:
+            return search_epo_patents(case, query)
+        return result
+    return search_epo_patents(case, query)
+
+
 def run_external_research(case: Any) -> dict[str, Any]:
     query = build_research_query(case)
     if not settings.external_research_enabled:
         return {
             "query": query,
-            "patents": search_epo_patents(case, query),
+            "patents": search_patents(case, query),
             "science": search_pubmed(case, query),
             "status": "disabled",
         }
-    patents = search_epo_patents(case, query)
+    patents = search_patents(case, query)
     science = search_pubmed(case, query)
     return {
         "query": query,

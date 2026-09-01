@@ -17,7 +17,7 @@ Source-grounded innovation intelligence for Ayurvedic and biological-resource pr
 - Every indexed chunk records embedding provider, model and revision; every retrieved citation records lexical, semantic and reranker scores plus page/chunk and content-hash lineage.
 - Analysis now includes a claim-to-evidence provenance graph and an Innovation Design-Around workspace that converts reviewer objections into testable technical alternatives.
 - Case-specific analysis preserves quantities, extract ratios, standardization, dose, release profiles and critical process parameters instead of replacing missing facts with generic advice.
-- Live PubMed retrieval extracts population, dose, endpoints and stated limitations; credentialed EPO OPS retrieval adds patent-family records and claim text for feature-level overlap screening.
+- Live PubMed retrieval extracts population, dose, endpoints and stated limitations; credentialed Google Patents BigQuery or EPO OPS retrieval adds patent-family records and available claim text for feature-level overlap screening.
 - Exact traditional-knowledge passages from authorized/user-supplied documents retain page/chunk locators and SHA-256 lineage. Restricted TKDL content is never represented as publicly searched.
 - Versioned reindex jobs and authoritative-source snapshots support model migrations and legal-change review.
 - Human expert-review requests and branded PDF decision records with evidence registers, run/corpus identifiers and report hashes.
@@ -121,11 +121,22 @@ pytest -q
 
 ## Source and decision-safety model
 
-`backend/data/sources.json` is a versioned curated registry of primary law, official regulation/guidance, treaties and official live-data services. It is supplemented at analysis time by PubMed and, when EPO credentials are configured, EPO OPS patent-family and claim records. The engine does not claim comprehensive patent, TKDL, full-text scientific or regulatory clearance. If retrieval does not find relevant support, Ask IP-SAKTI abstains. All screening conclusions require human review.
+`backend/data/sources.json` is a versioned curated registry of primary law, official regulation/guidance, treaties and official live-data services. It is supplemented at analysis time by PubMed and a configured Google Patents BigQuery or EPO OPS connector. The engine does not claim comprehensive patent, TKDL, full-text scientific or regulatory clearance. If retrieval does not find relevant support, Ask IP-SAKTI abstains. All screening conclusions require human review.
 
 ## Live patent and scientific research
 
 Docker Compose enables external research. PubMed uses NCBI ESearch/EFetch and returns the exact query and source links. Set `IPSAKTI_NCBI_CONTACT_EMAIL`; an optional `IPSAKTI_NCBI_API_KEY` raises the permitted request rate.
+
+To use the Google Patents public BigQuery tables, enable the BigQuery API and billing on the query project, provide Application Default Credentials through the deployment identity, and set:
+
+```dotenv
+IPSAKTI_PATENT_SEARCH_PROVIDER=google_bigquery
+IPSAKTI_GOOGLE_CLOUD_PROJECT=your-billing-project
+IPSAKTI_BIGQUERY_LOCATION=US
+IPSAKTI_BIGQUERY_MAXIMUM_BYTES_BILLED=100000000000
+```
+
+The connector uses parameterized SQL, an LRU result cache and a per-query billing cap. It searches extracted top terms, joins worldwide simple-family identifiers, retrieves available English claims (primarily US publications), reports the source table modification time and links each result to Google Patents. The result remains a screening set, not novelty or FTO clearance. Google stores public-dataset data, while the configured project pays query-processing charges.
 
 Register an application for EPO Open Patent Services and set:
 
@@ -134,7 +145,7 @@ IPSAKTI_EPO_OPS_CONSUMER_KEY=...
 IPSAKTI_EPO_OPS_CONSUMER_SECRET=...
 ```
 
-Without EPO credentials, the patent workspace shows `credential required`, preserves the exact Espacenet query and makes no claim-level or patent-family assertion. Production startup rejects missing EPO credentials. TKDL remains an authorized-access dependency: upload legally obtained extracts to get exact passage/page citations, or complete the search with an authorized patent professional.
+Set `IPSAKTI_PATENT_SEARCH_PROVIDER=auto` to prefer configured BigQuery and otherwise use EPO OPS. Without credentials for either provider, the patent workspace shows `credential required`, preserves a manual search link and makes no claim-level or patent-family assertion. Production startup rejects a deployment without a configured patent provider. TKDL remains an authorized-access dependency: upload legally obtained extracts to get exact passage/page citations, or complete the search with an authorized patent professional.
 
 ## Evidence assurance and retrieval
 

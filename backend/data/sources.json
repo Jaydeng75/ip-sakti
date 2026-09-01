@@ -122,6 +122,18 @@
     "keywords": ["epo", "ops", "patent family", "claims", "prior art", "legal status"]
   },
   {
+    "id": "google-patents-public-datasets",
+    "title": "Google Patents Public Datasets",
+    "authority": "Google Cloud Public Dataset Program / IFI CLAIMS Patent Services",
+    "jurisdiction": "International patent data",
+    "effective_date": "Dataset table metadata checked at query time",
+    "url": "https://console.cloud.google.com/bigquery?p=patents-public-data&d=google_patents_research&page=dataset",
+    "support_status": "official-public-data-service",
+    "summary": "Public BigQuery patent tables used for bounded top-term discovery, simple-family grouping and available US English claim text. Results require current patent-office verification.",
+    "locator": "google_patents_research.publications joined to patents.publications",
+    "keywords": ["google patents", "bigquery", "patent family", "claims", "prior art", "public dataset"]
+  },
+  {
     "id": "epo-epc-article-52",
     "title": "European Patent Convention — Article 52",
     "authority": "European Patent Office",
