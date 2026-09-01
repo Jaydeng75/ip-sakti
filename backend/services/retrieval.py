@@ -168,6 +168,8 @@ class RerankerClient:
             try:
                 return self._http_scores(query, passages), settings.reranker_model
             except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+                if not settings.reranker_allow_fallback:
+                    raise RetrievalProviderError("Reranker provider is unavailable") from exc
                 logger.warning("reranker fallback error=%s", type(exc).__name__)
         return self._heuristic_scores(query, passages), "heuristic-coverage-v1"
 

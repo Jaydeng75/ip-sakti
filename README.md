@@ -18,7 +18,7 @@ Source-grounded innovation intelligence for Ayurvedic and biological-resource pr
 - Analysis now includes a claim-to-evidence provenance graph and an Innovation Design-Around workspace that converts reviewer objections into testable technical alternatives.
 - Case-specific analysis preserves quantities, extract ratios, standardization, dose, release profiles and critical process parameters instead of replacing missing facts with generic advice.
 - Live PubMed retrieval discovers studies, then available PMC JATS full text is structurally appraised for design, population, dose, comparator, duration, endpoints, numerical results, adverse events, funding, conflicts and author-reported limitations. Records without retrievable PMC XML remain visibly abstract-only. Credentialed Google Patents BigQuery or EPO OPS retrieval adds patent-family records and available claim text for feature-level overlap screening.
-- Exact traditional-knowledge passages from authorized/user-supplied documents retain page/chunk locators and SHA-256 lineage. Restricted TKDL content is never represented as publicly searched.
+- The TKDL Bridge creates case-specific official-search terms, opens the session-aware TKDL interface and imports authorized PDF/TXT/DOCX results into an exact-passage register with page/chunk locators and SHA-256 lineage. Restricted TKDL content is never represented as publicly scraped or searched.
 - Versioned reindex jobs and authoritative-source snapshots support model migrations and legal-change review.
 - Human expert-review requests and branded PDF decision records with evidence registers, run/corpus identifiers and report hashes.
 - Tamper-evident SHA-256 audit chaining, case-level audit history and administrator integrity verification.
@@ -179,7 +179,23 @@ IPSAKTI_RERANKER_REVISION=953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e
 
 The retrieval sequence is: PostgreSQL lexical and pgvector prefetch → score fusion → neural or explicitly labelled heuristic reranking → evidence-signal/abstention gate → top cited passages. Dense similarity alone cannot force a citation. Run `python evaluation.py` inside the backend environment to produce the starter retrieval report. The included dataset is an engineering smoke set; it must be replaced or supplemented with an expert-labelled bilingual benchmark before publishing an accuracy percentage.
 
-The repository includes an opt-in self-hosted service using Sentence Transformers. Start it with `docker compose --profile neural up -d retrieval`, then configure the backend with `IPSAKTI_EMBEDDING_PROVIDER=http`, `IPSAKTI_EMBEDDING_URL=http://retrieval:8200/v1`, `IPSAKTI_RERANKER_PROVIDER=http` and `IPSAKTI_RERANKER_URL=http://retrieval:8200/v1`. The first request downloads substantial model weights. The checked-in defaults pin the reviewed model commits above; deployments must still validate those exact artifacts and protect the service with `RETRIEVAL_SERVICE_TOKEN`.
+The repository includes a self-hosted Sentence Transformers service. For a fail-closed neural demo, use `docker-compose.neural.yml`: it routes the backend to pinned `intfloat/multilingual-e5-small` embeddings and the pinned `BAAI/bge-reranker-v2-m3` cross-encoder, preloads both models and disables deterministic/heuristic outage fallback.
+
+```bash
+docker compose --profile neural --env-file .env --env-file .env.bigquery \
+  -f docker-compose.yml -f docker-compose.bigquery.yml -f docker-compose.neural.yml \
+  up -d --build retrieval backend frontend
+```
+
+The model cache persists in a Docker volume. Protect the internal service with `RETRIEVAL_SERVICE_TOKEN`. After the services are healthy, warm the models and persist the main demo analysis in PostgreSQL:
+
+```bash
+docker compose --profile neural --env-file .env --env-file .env.bigquery \
+  -f docker-compose.yml -f docker-compose.bigquery.yml -f docker-compose.neural.yml \
+  exec backend python scripts/warm_demo.py --case-id 11
+```
+
+The warm-up validates the embedding dimensions and neural reranker response, reindexes outdated case documents, and reuses a current persisted run when possible. `--force` creates one fresh external-research run and may incur the configured BigQuery query charge. The stored analysis lets every presentation screen load without calling PubMed, PMC or BigQuery again.
 
 `POST /api/v1/cases/{case_id}/reindex` queues a versioned reindex job. `GET /api/v1/cases/{case_id}/reindex-jobs` exposes its status. Administrators can snapshot curated sources with `POST /api/v1/admin/sources/monitor`; detected changes remain review flags and are never silently treated as updated legal conclusions.
 

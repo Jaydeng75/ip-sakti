@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     registration_enabled: bool = True
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
-    corpus_version: str = "2026-09-01.official-registry.5"
+    corpus_version: str = "2026-09-01.official-registry.6"
     embedding_provider: str = "deterministic"
     embedding_url: str = "http://localhost:8081/v1"
     embedding_api_key: str | None = None
@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     reranker_revision: str = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
     reranker_timeout_seconds: float = 60.0
+    reranker_allow_fallback: bool = True
     source_monitor_timeout_seconds: float = 15.0
     source_monitor_max_bytes: int = 5 * 1024 * 1024
     external_research_enabled: bool = False

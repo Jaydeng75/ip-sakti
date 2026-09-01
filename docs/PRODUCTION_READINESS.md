@@ -8,6 +8,7 @@
 - PDF/TXT/DOCX validation, compressed-file expansion protection, optional fail-closed ClamAV scanning and SHA-256 integrity records.
 - Text extraction, page-aware chunking, hybrid lexical/vector retrieval and protected case-document citations.
 - PostgreSQL full-text and pgvector candidate prefetch, configurable multilingual embeddings and reranking.
+- Fail-closed neural-demo overlay with pinned multilingual E5 embeddings, pinned BGE cross-encoder reranking and model preloading.
 - Embedding/reranker model and revision lineage on indexed chunks and analysis runs.
 - Claim-to-evidence provenance, versioned reindex jobs and curated-source change snapshots.
 - Optional OpenTelemetry FastAPI instrumentation and request correlation headers.
@@ -48,6 +49,7 @@ The complete GitHub Actions definition is stored at `docs/github-actions-ci.temp
 - Replace the bundled engineering smoke set with at least 200–500 expert-labelled patent, TK, ABS, regulatory and scientific questions. Establish release gates for Recall@20, nDCG@10, citation correctness, groundedness, abstention F1 and language parity.
 - Deploy approved embedding and reranker services on private infrastructure, pin immutable model revisions and set `IPSAKTI_EMBEDDING_ALLOW_FALLBACK=false`.
 - Move the included database-backed reindex job executor to a durable worker queue before horizontal scaling; retain `reindex_jobs` as the user-visible state and audit record.
+- Run the checked-in demo warm-up before judging to validate both neural models and persist the selected provider-backed analysis; rerun only when the corpus, case or source data changes.
 - Schedule the source monitor through the deployment scheduler, review every `changed` snapshot and update the curated registry/corpus version only after qualified approval.
 - Obtain patent, regulatory, ABS, privacy/security and scientific approval before relying on results for filings or market entry.
 

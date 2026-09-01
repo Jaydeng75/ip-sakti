@@ -103,6 +103,8 @@ def validate_runtime() -> None:
             raise RuntimeError("Pin an approved embedding revision before production.")
         if settings.reranker_provider != "http" or not settings.reranker_url:
             raise RuntimeError("A dedicated neural reranker endpoint is required in production.")
+        if settings.reranker_allow_fallback:
+            raise RuntimeError("IPSAKTI_RERANKER_ALLOW_FALLBACK must be false in production.")
         if settings.reranker_revision.lower() in {"", "main", "latest"} or settings.reranker_revision.startswith(
             "review-and-pin"
         ):

@@ -1,0 +1,18 @@
+services:
+  backend:
+    environment:
+      IPSAKTI_EMBEDDING_PROVIDER: http
+      IPSAKTI_EMBEDDING_URL: http://retrieval:8200/v1
+      IPSAKTI_EMBEDDING_API_KEY: ${RETRIEVAL_SERVICE_TOKEN:-}
+      IPSAKTI_EMBEDDING_ALLOW_FALLBACK: "false"
+      IPSAKTI_RERANKER_PROVIDER: http
+      IPSAKTI_RERANKER_URL: http://retrieval:8200/v1
+      IPSAKTI_RERANKER_API_KEY: ${RETRIEVAL_SERVICE_TOKEN:-}
+      IPSAKTI_RERANKER_ALLOW_FALLBACK: "false"
+    depends_on:
+      retrieval:
+        condition: service_healthy
+
+  retrieval:
+    environment:
+      RETRIEVAL_PRELOAD_MODELS: "true"

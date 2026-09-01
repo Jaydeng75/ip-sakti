@@ -184,6 +184,9 @@ export type AnalysisResult = {
       query: string;
       search_url: string;
       authorized_search_required: boolean;
+      access_scope?: string;
+      integration_mode?: string;
+      supported_imports?: string[];
       limitation: string;
     };
     scientific_studies: ScientificStudyCollection;
