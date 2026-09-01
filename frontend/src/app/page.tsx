@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Sidebar from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
@@ -18,8 +19,10 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-background text-ink">
+      <Sidebar />
+
       {/* NAVBAR */}
-      <header className="flex items-center justify-between px-7 py-6 md:px-20">
+      <header className="flex items-center justify-between py-6 pl-20 pr-7 md:pl-24 md:pr-20">
         <Link
           href="/"
           className="group inline-flex items-baseline tracking-[-0.04em] transition-opacity duration-200 hover:opacity-75"
