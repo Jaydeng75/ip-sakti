@@ -34,7 +34,11 @@ export default function AskPage() {
 
   async function ask(prompt = question, questionLanguage = inputLanguage) {
     const trimmed = prompt.trim();
-    if (!trimmed || asking || !currentCase.backendId) return;
+    if (asking || !currentCase.backendId) return;
+    if (trimmed.length < 2) {
+      setError("Enter at least two characters so IP-SAKTI can identify the question.");
+      return;
+    }
     setMessages((current) => [...current, { role: "user", text: trimmed }]);
     setQuestion("");
     setAsking(true);
@@ -45,6 +49,7 @@ export default function AskPage() {
       setActiveResponse(response);
       setSelectedSource(response.citations[0] ?? null);
     } catch (caught) {
+      setQuestion(trimmed);
       setError(caught instanceof Error ? caught.message : "The assistant could not answer.");
     } finally {
       setAsking(false);
@@ -68,7 +73,7 @@ export default function AskPage() {
 
           <section className="mt-6 grid min-h-[680px] gap-6 lg:grid-cols-[1fr_410px]">
             <div className="flex min-h-[680px] flex-col overflow-hidden rounded-3xl border border-border bg-surface">
-              <div className="border-b border-border px-6 py-5"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Case conversation</p><p className="mt-1 text-sm text-ink-muted">Grounded retrieval · safe abstention enabled</p></div>
+              <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-5"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Case conversation</p><p className="mt-1 text-sm text-ink-muted">Grounded retrieval · safe abstention enabled</p></div><span className="flex items-center gap-2 rounded-full bg-accent-subtle px-3 py-1.5 font-mono text-[9px] uppercase text-accent"><span className="size-1.5 rounded-full bg-accent" />Ready</span></div>
               <div className="flex-1 space-y-5 overflow-y-auto p-6">
                 {messages.map((message, index) => (
                   <button key={`${message.role}-${index}`} type="button" onClick={() => { if (message.response) { setActiveResponse(message.response); setSelectedSource(message.response.citations[0] ?? null); } }} className={`block text-left ${message.role === "user" ? "ml-auto max-w-[82%] rounded-2xl bg-accent px-5 py-4 text-white" : "max-w-[90%] rounded-2xl bg-background px-5 py-4 text-ink"}`}>
@@ -80,7 +85,7 @@ export default function AskPage() {
                 {asking && <div className="max-w-[90%] animate-pulse rounded-2xl bg-background px-5 py-4 text-sm text-ink-muted">Retrieving relevant primary sources…</div>}
                 {error && <div role="alert" className="rounded-xl bg-danger-subtle p-4 text-sm text-danger">{error}</div>}
               </div>
-              <div className="border-t border-border p-4"><div className="rounded-2xl border border-border bg-background p-3 focus-within:border-accent"><textarea value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(); } }} placeholder="Ask a legal, evidence, patent, ABS or market question…" className="min-h-24 w-full resize-none bg-transparent px-2 py-2 text-sm leading-6 outline-none" /><div className="flex flex-wrap items-end justify-between gap-3 border-t border-border px-2 pt-3"><div className="flex flex-wrap gap-3"><LanguageSelect label="Question language" value={inputLanguage} onChange={setInputLanguage} /><LanguageSelect label="Answer language" value={responseLanguage} onChange={setResponseLanguage} /></div><button type="button" onClick={() => void ask()} disabled={!question.trim() || asking} className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40">Ask →</button></div></div><p className="px-2 pt-2 text-[10px] leading-4 text-ink-muted">Non-English text is machine translated by IndicTrans2. Citations and the authoritative answer remain tied to the English source analysis.</p></div>
+              <div className="border-t border-border p-4"><div className="rounded-2xl border border-border bg-background p-3 focus-within:border-accent"><textarea value={question} onChange={(event) => { setQuestion(event.target.value); if (error) setError(null); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void ask(); } }} placeholder="Ask a legal, evidence, patent, ABS or market question…" className="min-h-24 w-full resize-none bg-transparent px-2 py-2 text-sm leading-6 outline-none" /><div className="flex flex-wrap items-end justify-between gap-3 border-t border-border px-2 pt-3"><div className="flex flex-wrap gap-3"><LanguageSelect label="Question language" value={inputLanguage} onChange={setInputLanguage} /><LanguageSelect label="Answer language" value={responseLanguage} onChange={setResponseLanguage} /></div><button type="button" onClick={() => void ask()} disabled={question.trim().length < 2 || asking} className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40">{asking ? "Checking sources…" : "Ask →"}</button></div></div><p className="px-2 pt-2 text-[10px] leading-4 text-ink-muted">Non-English text is machine translated by IndicTrans2. Citations and the authoritative answer remain tied to the English source analysis.</p></div>
             </div>
 
             <aside className="flex min-h-[680px] flex-col overflow-hidden rounded-3xl border border-border bg-surface">

@@ -4,6 +4,19 @@ export const API_BASE_URL =
 const TOKEN_KEY = "ip-sakti-token";
 const DEVICE_KEY = "ip-sakti-device-credentials";
 
+type ApiErrorPayload = {
+  detail?: string | Array<{ msg?: string; loc?: Array<string | number> }>;
+};
+
+function apiErrorMessage(payload: ApiErrorPayload | null, fallback: string) {
+  if (typeof payload?.detail === "string") return payload.detail;
+  if (Array.isArray(payload?.detail)) {
+    const messages = payload.detail.map((item) => item.msg).filter(Boolean);
+    if (messages.length) return messages.join(" ");
+  }
+  return fallback;
+}
+
 export type ApiCase = {
   id: number;
   owner_id: number;
@@ -425,8 +438,8 @@ export async function login(email: string, password: string) {
     body: JSON.stringify({ email, password }),
   });
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(payload?.detail ?? "Sign-in failed.");
+    const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new Error(apiErrorMessage(payload, "Sign-in failed."));
   }
   const session = (await response.json()) as { access_token: string; user: { display_name: string } };
   window.localStorage.setItem(TOKEN_KEY, session.access_token);
@@ -451,8 +464,8 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
   }
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(payload?.detail ?? `API request failed (${response.status}).`);
+    const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new Error(apiErrorMessage(payload, `API request failed (${response.status}).`));
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
@@ -463,8 +476,8 @@ async function authenticatedBlob(url: string, init: RequestInit = {}) {
   headers.set("Authorization", `Bearer ${await token()}`);
   const response = await fetch(url, { ...init, headers });
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(payload?.detail ?? `Download failed (${response.status}).`);
+    const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new Error(apiErrorMessage(payload, `Download failed (${response.status}).`));
   }
   return response.blob();
 }

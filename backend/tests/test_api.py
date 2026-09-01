@@ -90,6 +90,14 @@ def test_authenticated_case_analysis_and_grounded_answer():
         assert all(item["url"].startswith("https://") for item in body["citations"])
         assert body["requires_human_review"] is True
 
+        short_greeting = client.post(
+            f"/api/v1/cases/{case_id}/ask",
+            json={"question": "hi"},
+            headers=headers,
+        )
+        assert short_greeting.status_code == 200, short_greeting.text
+        assert short_greeting.json()["claim_type"] == "unsupported"
+
 
 def test_safe_abstention_and_case_ownership():
     with TestClient(app) as client:

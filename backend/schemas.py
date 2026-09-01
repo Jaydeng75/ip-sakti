@@ -77,7 +77,7 @@ class AnalysisResponse(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str = Field(min_length=3, max_length=4_000)
+    question: str = Field(min_length=2, max_length=4_000)
     input_language: str = Field(default="English", max_length=40)
     language: str = Field(default="English", max_length=40)
 
