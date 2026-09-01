@@ -1,6 +1,5 @@
 import re
 from typing import Any
-from urllib.parse import quote_plus
 
 from services.evidence import evidence_citation
 
@@ -262,9 +261,9 @@ def build_case_specific_analysis(case: Any, evidence_matches: list[dict[str, Any
             "status": "exact_passages_retrieved" if tk_records else "no_exact_passage_retrieved",
             "records": tk_records,
             "query": tk_query,
-            "search_url": f"https://tkdl.res.in/tkdl/langdefault/common/Home.asp?GL=Eng&search={quote_plus(tk_query)}",
+            "search_url": "https://www.tkdl.res.in/tkdl/langdefault/common/Global_Search.asp?GL=Eng",
             "authorized_search_required": True,
-            "limitation": "TKDL access is restricted. No absence-of-prior-art conclusion is made when an exact authorized passage is unavailable.",
+            "limitation": "Use the TKDL Global Search handoff for manual verification. Only an exact returned formulation and locator may support a finding; no absence-of-prior-art conclusion is made when a record cannot be retrieved.",
         },
         "scientific_studies": {
             **external_research.get("science", {}),

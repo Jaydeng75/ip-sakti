@@ -64,6 +64,7 @@ def test_case_specific_analysis_preserves_exact_facts_and_passages():
     assert any("300 mg" in row["submitted_value"] for row in result["novelty_claim_chart"])
     assert result["traditional_knowledge"]["records"][0]["locator"] == "page 12"
     assert result["traditional_knowledge"]["records"][0]["content_sha256"] == "a" * 64
+    assert "Global_Search.asp" in result["traditional_knowledge"]["search_url"]
     assert any(row["status"] == "overlap_found" for row in result["novelty_claim_chart"])
     design = build_specific_design_around(case, result, ["Patent"], [])
     assert len(design["alternatives"]) == 4
