@@ -200,14 +200,20 @@ def retrieve_case_evidence(
     query_tokens = _tokens(query)
     if not query_tokens:
         return []
-    prefetch_limit = max(limit, settings.retrieval_prefetch_limit)
-    query_batch = embedding_client().query(query)
-    query_embedding = query_batch.vectors[0]
     base_query = (
         select(models.EvidenceChunk, models.UploadedDocument)
         .join(models.UploadedDocument, models.EvidenceChunk.document_id == models.UploadedDocument.id)
         .where(models.EvidenceChunk.case_id == case_id)
     )
+    has_evidence = db.scalar(
+        select(models.EvidenceChunk.id).where(models.EvidenceChunk.case_id == case_id).limit(1)
+    )
+    if has_evidence is None:
+        return []
+
+    prefetch_limit = max(limit, settings.retrieval_prefetch_limit)
+    query_batch = embedding_client().query(query)
+    query_embedding = query_batch.vectors[0]
     if db.bind and db.bind.dialect.name == "postgresql" and query_batch.provider != "deterministic-fallback":
         semantic_rows = db.execute(
             base_query.where(models.EvidenceChunk.embedding_vector.is_not(None))

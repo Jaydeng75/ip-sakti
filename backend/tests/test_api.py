@@ -120,6 +120,21 @@ def test_authenticated_case_analysis_and_grounded_answer():
         assert short_greeting.json()["claim_type"] == "unsupported"
 
 
+def test_analysis_without_uploaded_documents_does_not_require_embedding_provider(monkeypatch):
+    def unavailable_provider():
+        raise AssertionError("Embedding provider should not be called without evidence chunks")
+
+    monkeypatch.setattr("services.evidence.embedding_client", unavailable_provider)
+    with TestClient(app) as client:
+        headers = auth_headers(client, "no-evidence-provider")
+        case_id = client.post("/api/v1/cases", json=sample_case(), headers=headers).json()["id"]
+
+        analyzed = client.post(f"/api/v1/cases/{case_id}/analyze", headers=headers)
+
+        assert analyzed.status_code == 200, analyzed.text
+        assert analyzed.json()["result"]["evidence_retrieval"]["chunk_count"] == 0
+
+
 def test_safe_abstention_and_case_ownership():
     with TestClient(app) as client:
         first = auth_headers(client, "owner")
