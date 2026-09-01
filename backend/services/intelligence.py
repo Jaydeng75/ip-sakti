@@ -182,6 +182,25 @@ def build_risks(case: Any, specific: dict[str, Any] | None = None) -> list[dict[
     delivery = str(metadata.get("delivery_mechanism") or case.product_form or "the submitted delivery format")
     standardization = str(metadata.get("standardization") or "the submitted standardization")
     dose = str(metadata.get("dose") or metadata.get("quantitative_composition") or "the proposed dose")
+    patent_landscape = specific.get("patent_landscape", {})
+    patent_status = patent_landscape.get("status", "not_run").replace("_", " ")
+    patent_records = patent_landscape.get("records", [])
+    relevance_terms = {
+        token.lower()
+        for token in re.findall(r"[A-Za-z][A-Za-z-]{4,}", " ".join([short_botanical, delivery, standardization]))
+        if token.lower() not in {"extract", "standardized", "metered", "based", "delivery", "system"}
+    }
+    relevant_patents = [
+        record for record in patent_records
+        if sum(term in str(record.get("title", "")).lower() for term in relevance_terms) >= 2
+        or short_botanical.split()[0].lower() in str(record.get("title", "")).lower()
+    ]
+    patent_evidence = (
+        f"Product-relevant keyword lead {relevant_patents[0].get('publication_number')}: {relevant_patents[0].get('title')}; independent claims remain unmapped and no closest-prior-art conclusion is made."
+        if relevant_patents
+        else f"Patent search status: {patent_status}. Retrieved keyword leads did not pass the product-specific title-relevance gate; no closest patent or claim overlap is asserted."
+    )
+    tk_records = specific.get("traditional_knowledge", {}).get("records", [])
     tk_score = (
         84 if case.classical_formulation else (68 if _contains(text, ["ayur", "traditional", "classical"]) else 38)
     )
@@ -215,6 +234,10 @@ def build_risks(case: Any, specific: dict[str, Any] | None = None) -> list[dict[
             "negative_signals": [f"Known-use exposure: {short_botanical} and the claimed use", "Verified exact TK source is not yet linked"],
             "missing_evidence": ["Exact classical formulation/passage and locator", "Authorized TKDL or classical-source verification"],
             "what_changes_score": ["Exact source linkage increases certainty", "A verified absence cannot be inferred from an incomplete TKDL search"],
+            "finding": f"The {short_botanical} cognitive-use element is the highest TK/prior-use exposure.",
+            "why": f"The submitted classical-use statement connects {short_botanical} with memory/cognition, while {delivery} is presented as a modern format.",
+            "evidence_basis": [f"Exact verified TK passages currently linked: {len(tk_records)}", "TKDL/classical-source verification remains pending."],
+            "fix": "Verify the exact formulation, passage and locator, then treat known use as the baseline rather than the inventive contribution.",
         },
         {
             "key": "patent_opportunity",
@@ -227,6 +250,10 @@ def build_risks(case: Any, specific: dict[str, Any] | None = None) -> list[dict[
             "negative_signals": [f"Known {short_botanical} use", "Possible obviousness", "Prior-art search incomplete", "No complete claim-level comparison"],
             "missing_evidence": ["Feature-by-feature independent claim chart", "Patent-family/legal-status review", "Comparative technical-effect data"],
             "what_changes_score": ["A non-obvious measured technical effect strengthens the screen", "Close claim overlap or routine optimization weakens it"],
+            "finding": f"Strongest candidate: combined {delivery} + phospholipid carrier + defined standardization/performance window.",
+            "why": f"The broad {short_botanical} use is exposed, and the combination may be challenged as predictable unless the exact architecture produces an unexpected effect.",
+            "evidence_basis": [patent_evidence, f"Submitted technical target: {metadata.get('release_profile') or 'no validated release/performance threshold supplied'}"],
+            "fix": "Map every feature to independent claims, then generate comparative mucosal-permeation, release, stability and dose-uniformity data against conventional and carrier-free comparators.",
         },
         {
             "key": "regulatory",
@@ -239,6 +266,10 @@ def build_risks(case: Any, specific: dict[str, Any] | None = None) -> list[dict[
             "negative_signals": ["Final intended market claim and positioning control the route"],
             "missing_evidence": ["Signed claim/positioning matrix", "India and UK route determinations"],
             "what_changes_score": ["Final label wording and therapeutic positioning can change the applicable pathway"],
+            "finding": "Final India/UK product classification is unresolved.",
+            "why": f"The claim ‘{metadata.get('proposed_claim') or case.intended_use}’ can shift pathway depending on medicinal versus wellness positioning and whether the product is represented as AYUSH or supplement.",
+            "evidence_basis": ["Submitted markets: " + ", ".join(case.target_markets or []), "Current official India and UK pathway sources require intended-purpose analysis."],
+            "fix": "Answer the medicinal-claim, AYUSH-intent and classical/proprietary representation questions and issue a signed claims/classification matrix.",
         },
         {
             "key": "abs",
@@ -253,6 +284,10 @@ def build_risks(case: Any, specific: dict[str, Any] | None = None) -> list[dict[
             "negative_signals": ["The screening score is not a probability of legal obligation"],
             "missing_evidence": ["Provider/access-date/party verification", "Qualified ABS applicability review"],
             "what_changes_score": ["Species, origin, transaction and applicant status determine the legal analysis"],
+            "finding": "Provenance is recorded, but transaction-specific ABS applicability is not decided.",
+            "why": case.biological_sourcing or "Biological-resource use is present without complete provenance facts.",
+            "evidence_basis": ["Submitted sourcing record", "Indian biodiversity/ABS legal framework; party and transaction facts remain decisive."],
+            "fix": "Verify species, provider, access date, contracting parties and intended utilization in a resource-level ABS decision record.",
         },
         {
             "key": "evidence",
@@ -267,6 +302,10 @@ def build_risks(case: Any, specific: dict[str, Any] | None = None) -> list[dict[
             "negative_signals": [f"Dose-matched studies: {study_counts.get('dose_matched', 0)}", f"Formulation-matched studies: {study_counts.get('formulation_matched', 0)}", f"Direct exact-product studies: {study_counts.get('direct_product', 0)}"],
             "missing_evidence": ["Same/comparable standardized extract", "Dose-matched healthy-adult evidence", "Oral-mucosal delivery bridging evidence", "Claim-specific safety/tolerability"],
             "what_changes_score": ["Direct formulation trials raise readiness", "Indirect ingredient evidence alone cannot establish the exact product claim"],
+            "finding": "Ingredient evidence exists, but the exact product claim is not established.",
+            "why": f"The case has {study_counts.get('ingredient_level', 0)} ingredient-level record(s), but {study_counts.get('dose_matched', 0)} dose-, {study_counts.get('formulation_matched', 0)} formulation- and {study_counts.get('direct_product', 0)} direct-product match(es).",
+            "evidence_basis": ["PubMed/PMC claim-match matrix", f"Submitted exposure: {dose}", f"Submitted formulation: {delivery}"],
+            "fix": "Run a randomized exact-spray comparator study with validated memory and attention endpoints, exposure/bridging measures, safety and tolerability.",
         },
     ]
     support = {

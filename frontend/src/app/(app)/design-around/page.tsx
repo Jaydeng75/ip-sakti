@@ -7,69 +7,40 @@ import { useCurrentAnalysis } from "@/lib/use-current-analysis";
 export default function DesignAroundPage() {
   const { analysis, loading, error } = useCurrentAnalysis();
   const design = analysis?.result.design_around;
+  const advisory = analysis?.result.case_specific_analysis.technical_advisory;
 
   return (
     <div className="py-8 md:py-10">
-      <ModuleHeader
-        eyebrow="Innovation Design-Around"
-        title="Change the technical facts, not just the wording."
-        description="Turn reviewer objections into counterfactual product, process, claim and portfolio directions—with the new evidence burden kept visible."
-      />
-      {!design ? <AnalysisState loading={loading} error={error} /> : (
+      <ModuleHeader eyebrow="Technical Differentiation Advisor" title="How do I strengthen this innovation?" description="Analyze every submitted feature, explain why it is weak or differentiating, and turn each gap into a measurable engineering, evidence or classification action." />
+      {!design || !advisory ? <AnalysisState loading={loading} error={error} /> : (
         <>
-          <section className="mt-8 rounded-2xl border border-warm/30 bg-warm-subtle p-5">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-warm">Human-review boundary</p>
-            <p className="mt-2 text-sm leading-6 text-ink">{design.notice}</p>
-          </section>
-          <section className="mt-8 grid gap-5 xl:grid-cols-2">
-            {design.alternatives.map((alternative, index) => (
-              <article key={alternative.id} className="rounded-3xl border border-border bg-surface p-6">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Direction {String(index + 1).padStart(2, "0")}</span>
-                  <span className="rounded-full bg-accent-subtle px-3 py-1 font-mono text-[9px] uppercase text-accent">inference · review required</span>
-                </div>
-                <h2 className="mt-5 text-2xl font-semibold">{alternative.dimension}</h2>
-                {alternative.basis && <div className="mt-4 rounded-xl border border-accent/20 bg-accent-subtle p-3"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-accent">Case-specific basis</p><p className="mt-1 text-xs leading-5 text-ink">{alternative.basis}</p></div>}
-                <p className="mt-4 text-sm leading-6 text-ink">{alternative.proposed_change}</p>
-                <p className="mt-3 text-sm leading-6 text-ink-muted">{alternative.rationale}</p>
-                <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                  <ListBlock title="Evidence to generate" items={alternative.evidence_required} tone="accent" />
-                  <ListBlock title="Residual risks" items={alternative.residual_risks} tone="warm" />
-                </div>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {alternative.citations.map((citation) => (
-                    <button key={citation.id} type="button" onClick={() => void openCitation(citation)} className="rounded-full border border-border px-3 py-1.5 text-[10px] font-semibold text-ink-muted transition hover:border-accent hover:text-accent">
-                      {citation.title} ↗
-                    </button>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </section>
-          <section className="mt-8 rounded-3xl border border-border bg-[#16212B] p-7 text-white">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/50">Recommended protection sequence</p>
-            <div className="mt-5 grid gap-3 lg:grid-cols-2">
-              {design.recommended_route.map((step, index) => (
-                <div key={step} className="flex gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <span className="font-mono text-xs text-[#9BD0C0]">{String(index + 1).padStart(2, "0")}</span>
-                  <p className="text-sm leading-6 text-white/80">{step}</p>
-                </div>
-              ))}
+          <section className="mt-8 rounded-2xl border border-warm/30 bg-warm-subtle p-5"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-warm">Human-review boundary</p><p className="mt-2 text-sm leading-6 text-ink">{advisory.notice}</p></section>
+
+          <section className="mt-8 rounded-3xl border border-border bg-[#16212B] p-6 text-white md:p-8">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#9BD0C0]">Top five actions</p><h2 className="mt-2 text-3xl font-semibold">Move from risk screening to invention improvement.</h2>
+            <div className="mt-7 grid gap-4 lg:grid-cols-2">
+              {advisory.strength_actions.map((action) => <ActionCard key={action.rank} action={action} />)}
             </div>
           </section>
+
+          <section className="mt-8 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-3xl border border-border bg-surface p-6"><div className="flex items-center justify-between"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Inventive-step reasoning</p><span className="rounded-full bg-warm-subtle px-3 py-1 font-mono text-[9px] uppercase text-warm">{advisory.inventive_step.level}</span></div><h2 className="mt-4 text-2xl font-semibold">{advisory.inventive_step.finding}</h2><p className="mt-4 rounded-xl border border-danger/20 bg-danger/5 p-4 text-sm"><strong>Weakest element:</strong> {advisory.inventive_step.weakest_element}</p><ListBlock title="Why this can be challenged" items={advisory.inventive_step.reasoning} tone="warm" /><ListBlock title="How to strengthen it" items={advisory.inventive_step.how_to_strengthen} tone="accent" /></div>
+            <div className="rounded-3xl border border-border bg-surface p-6"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Technical differentiation advisor</p><div className="mt-5 rounded-2xl border border-border bg-background p-5"><p className="font-mono text-[9px] uppercase text-ink-muted">Current</p><p className="mt-2 text-lg font-semibold">{advisory.differentiation_advisor.current}</p><p className="mt-4 font-mono text-[9px] uppercase text-danger">Problem</p><p className="mt-2 text-sm leading-6 text-ink-muted">{advisory.differentiation_advisor.problem}</p></div><ListBlock title="Ways to strengthen" items={advisory.differentiation_advisor.ways_to_strengthen} tone="accent" /></div>
+          </section>
+
+          <section className="mt-8 rounded-3xl border border-border bg-surface p-6 md:p-8"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Feature-level reasoning</p><h2 className="mt-2 text-2xl font-semibold">Which exact element is weak—and why?</h2><div className="mt-6 overflow-x-auto"><table className="min-w-[1000px] w-full border-collapse text-left"><thead><tr className="border-b border-border font-mono text-[9px] uppercase tracking-[0.12em] text-ink-muted"><th className="p-3">Feature</th><th className="p-3">Status</th><th className="p-3">Why</th><th className="p-3">Evidence basis</th><th className="p-3">Advisory</th></tr></thead><tbody>{advisory.feature_assessments.map((feature) => <tr key={feature.id} className="border-b border-border align-top"><td className="p-3"><p className="text-sm font-semibold">{feature.feature}</p><p className="mt-1 max-w-52 text-[10px] leading-4 text-ink-muted">{feature.submitted_value}</p></td><td className="p-3"><span className="rounded-full bg-accent-subtle px-2.5 py-1 text-[10px] font-semibold text-accent">{feature.status_label}</span></td><td className="max-w-xs p-3 text-xs leading-5 text-ink-muted">{feature.why}</td><td className="max-w-xs p-3"><ul className="space-y-1 text-xs leading-5 text-ink-muted">{feature.evidence_basis.map((item) => <li key={item}>• {item}</li>)}</ul></td><td className="max-w-xs p-3 text-xs font-medium leading-5">{feature.advisory}</td></tr>)}</tbody></table></div></section>
+
+          <section className="mt-8"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">If you changed X…</p><h2 className="mt-2 text-2xl font-semibold">Counterfactual impact simulator</h2><div className="mt-5 grid gap-5 xl:grid-cols-3">{advisory.change_scenarios.map((scenario) => <article key={scenario.change} className="rounded-3xl border border-border bg-surface p-6"><h3 className="text-lg font-semibold">{scenario.change}</h3><div className="mt-5 space-y-3">{scenario.impacts.map((impact) => <div key={impact.area} className="rounded-xl border border-border bg-background p-4"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold">{impact.area}</p><Direction value={impact.direction} /></div><p className="mt-2 text-[11px] leading-5 text-ink-muted">{impact.reason}</p></div>)}</div></article>)}</div></section>
+
+          <section className="mt-8 grid gap-6 lg:grid-cols-2"><div className="rounded-3xl border border-border bg-surface p-6"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Exact scientific advisor</p><p className="mt-4 rounded-xl bg-accent-subtle p-4 text-sm leading-6"><strong>Currently supported:</strong> {advisory.scientific_advisor.supported}</p><ListBlock title="Not established" items={advisory.scientific_advisor.not_supported} tone="warm" /><div className="mt-5 rounded-xl border border-accent/30 p-4"><p className="font-mono text-[9px] uppercase text-accent">Study that would help most</p><p className="mt-2 text-sm leading-6">{advisory.scientific_advisor.best_next_study}</p></div></div><div className="rounded-3xl border border-border bg-surface p-6"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Classification resolver</p><p className="mt-4 text-sm leading-6 text-ink-muted">{advisory.classification_resolver.why_unresolved}</p><p className="mt-6 text-sm font-semibold">Answer these three questions:</p><ol className="mt-4 space-y-3">{advisory.classification_resolver.questions.map((question, index) => <li key={question} className="flex gap-3 rounded-xl border border-border bg-background p-4"><span className="font-mono text-[10px] text-accent">{index + 1}</span><p className="text-xs leading-5">{question}</p></li>)}</ol></div></section>
+
+          <section className="mt-10"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Evidence-backed design directions</p><h2 className="mt-2 text-2xl font-semibold">Turn selected features into falsifiable test plans.</h2><div className="mt-5 grid gap-5 xl:grid-cols-2">{design.alternatives.map((alternative, index) => <article key={alternative.id} className="rounded-3xl border border-border bg-surface p-6"><div className="flex items-center justify-between gap-4"><span className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">Direction {String(index + 1).padStart(2, "0")}</span><span className="rounded-full bg-accent-subtle px-3 py-1 font-mono text-[9px] uppercase text-accent">inference · review required</span></div><h3 className="mt-5 text-2xl font-semibold">{alternative.dimension}</h3>{alternative.basis && <div className="mt-4 rounded-xl border border-accent/20 bg-accent-subtle p-3"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-accent">Case-specific basis</p><p className="mt-1 text-xs leading-5 text-ink">{alternative.basis}</p></div>}<p className="mt-4 text-sm leading-6 text-ink">{alternative.proposed_change}</p><p className="mt-3 text-sm leading-6 text-ink-muted">{alternative.rationale}</p><div className="mt-6 grid gap-4 sm:grid-cols-2"><ListBlock title="Evidence to generate" items={alternative.evidence_required} tone="accent" /><ListBlock title="Residual risks" items={alternative.residual_risks} tone="warm" /></div><div className="mt-5 flex flex-wrap gap-2">{alternative.citations.map((citation) => <button key={citation.id} type="button" onClick={() => void openCitation(citation)} className="rounded-full border border-border px-3 py-1.5 text-[10px] font-semibold text-ink-muted transition hover:border-accent hover:text-accent">{citation.title} ↗</button>)}</div></article>)}</div></section>
         </>
       )}
     </div>
   );
 }
 
-function ListBlock({ title, items, tone }: { title: string; items: string[]; tone: "accent" | "warm" }) {
-  return (
-    <div className="rounded-2xl border border-border bg-background p-4">
-      <p className={`text-xs font-semibold ${tone === "accent" ? "text-accent" : "text-warm"}`}>{title}</p>
-      <ul className="mt-3 space-y-2">
-        {items.map((item) => <li key={item} className="text-xs leading-5 text-ink-muted">• {item}</li>)}
-      </ul>
-    </div>
-  );
-}
+function ActionCard({ action }: { action: { rank: number; title: string; impact: string; why: string; what_to_test: string[]; deliverable: string; strengthens: string[] } }) { return <article className="rounded-2xl border border-white/10 bg-white/5 p-5"><div className="flex items-center justify-between"><span className="font-mono text-xs text-[#9BD0C0]">{String(action.rank).padStart(2, "0")}</span><span className="rounded-full bg-white/10 px-2.5 py-1 font-mono text-[9px] uppercase text-[#9BD0C0]">{action.impact}</span></div><h3 className="mt-4 text-lg font-semibold">{action.title}</h3><p className="mt-3 text-xs leading-5 text-white/60">{action.why}</p><details className="mt-4 border-t border-white/10 pt-3"><summary className="cursor-pointer text-xs font-semibold text-[#9BD0C0]">Exact work and output</summary><ul className="mt-3 space-y-1 text-xs leading-5 text-white/65">{action.what_to_test.map((item) => <li key={item}>• {item}</li>)}</ul><p className="mt-3 text-xs leading-5 text-white/80"><strong>Deliverable:</strong> {action.deliverable}</p><p className="mt-2 text-[10px] uppercase text-white/40">Strengthens: {action.strengthens.join(" · ")}</p></details></article>; }
+function ListBlock({ title, items, tone }: { title: string; items: string[]; tone: "accent" | "warm" }) { return <div className="mt-5 rounded-2xl border border-border bg-background p-4"><p className={`text-xs font-semibold ${tone === "accent" ? "text-accent" : "text-warm"}`}>{title}</p><ul className="mt-3 space-y-2">{items.map((item) => <li key={item} className="text-xs leading-5 text-ink-muted">• {item}</li>)}</ul></div>; }
+function Direction({ value }: { value: string }) { const symbol = value === "up_up" ? "↑↑" : value === "up" ? "↑" : value === "down" ? "↓" : value === "low" ? "LOW" : value === "may_improve" ? "MAY ↑" : value.toUpperCase(); return <span className={`font-mono text-[10px] font-semibold ${value.startsWith("up") || value === "may_improve" ? "text-accent" : value === "down" ? "text-danger" : "text-warm"}`}>{symbol}</span>; }

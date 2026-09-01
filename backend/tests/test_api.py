@@ -80,6 +80,12 @@ def test_authenticated_case_analysis_and_grounded_answer():
         assert result["evidence_retrieval"]["prefetch_limit"] >= 8
         assert result["evidence_retrieval"]["reranker"]
         assert result["risk_cards"][1]["positive_signals"]
+        assert result["risk_cards"][1]["finding"]
+        assert result["risk_cards"][1]["evidence_basis"]
+        assert result["risk_cards"][1]["fix"]
+        advisory = result["case_specific_analysis"]["technical_advisory"]
+        assert len(advisory["strength_actions"]) == 5
+        assert any(item["status"] == "strong_if_proven" for item in advisory["feature_assessments"])
 
         answer = client.post(
             f"/api/v1/cases/{case_id}/ask",

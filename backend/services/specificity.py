@@ -345,6 +345,250 @@ def _specific_recommendations(case: Any, completeness: dict[str, Any], patents: 
     return recommendations[:8]
 
 
+def build_technical_advisory(
+    case: Any,
+    patents: dict[str, Any],
+    match_counts: dict[str, int],
+) -> dict[str, Any]:
+    metadata = _metadata(case)
+    ingredients = case.ingredients or []
+    active = ingredients[0] if ingredients else "Botanical active not supplied"
+    delivery_component = next(
+        (item for item in ingredients[1:] if re.search(r"phospholipid|phosphatidyl|liposom|carrier", item, re.IGNORECASE)),
+        "Delivery carrier not separately identified",
+    )
+    product_form = case.product_form or "Product form not supplied"
+    standardization = str(metadata.get("standardization") or "Standardization not supplied")
+    dose = str(metadata.get("dose") or "Dose not supplied")
+    release = str(metadata.get("release_profile") or "Performance/release target not supplied")
+    process = str(metadata.get("process_parameters") or metadata.get("manufacturing_process") or "Process window not supplied")
+    claim = str(metadata.get("proposed_claim") or case.intended_use or "Claim not supplied")
+    classical = str(metadata.get("classical_reference") or "No exact classical reference supplied")
+    patent_status = patents.get("status", "not_run").replace("_", " ")
+    patent_records = patents.get("records") or []
+    relevance_terms = [
+        token.lower()
+        for token in WORD_RE.findall(" ".join([active, product_form, delivery_component]))
+        if token.lower() not in STOPWORDS and len(token) >= 5
+    ]
+    relevant_patents = [
+        record for record in patent_records
+        if sum(term in str(record.get("title", "")).lower() for term in relevance_terms) >= 2
+        or active.split()[0].lower() in str(record.get("title", "")).lower()
+    ]
+    first_patent = relevant_patents[0] if relevant_patents else None
+    patent_basis = (
+        f"Product-relevant keyword lead: {first_patent.get('publication_number') or 'number unavailable'} — {first_patent.get('title') or 'title unavailable'}; claims still require element mapping and this is not asserted as closest prior art."
+        if first_patent
+        else f"Patent search status: {patent_status}. Retrieved keyword leads did not pass the product-specific title-relevance gate, so no closest patent or claim overlap is asserted."
+    )
+
+    features = [
+        {
+            "id": "known-use",
+            "feature": f"{active} cognitive use",
+            "submitted_value": claim,
+            "status": "weak_known",
+            "status_label": "Weak / known-use exposed",
+            "why": f"The submitted record links {active} to cognitive/memory use; that use cannot be treated as the inventive contribution by itself.",
+            "evidence_basis": [f"Submitted traditional-use statement: {classical}", patent_basis],
+            "advisory": "Do not rely on the botanical use alone for novelty. Treat it as the prior-art baseline and claim a proven technical architecture or effect.",
+        },
+        {
+            "id": "dosage-form",
+            "feature": product_form,
+            "submitted_value": product_form,
+            "status": "potentially_differentiating",
+            "status_label": "Potentially differentiating",
+            "why": "The metered oral-mucosal format is technically separate from the submitted traditional-use baseline, but known oral/buccal spray patents must still be compared claim by claim.",
+            "evidence_basis": [f"Submitted dosage form: {product_form}", patent_basis],
+            "advisory": "Search oral/buccal botanical-delivery claims and define the exact metering, droplet/particle, deposition and dose-uniformity boundaries.",
+        },
+        {
+            "id": "delivery-carrier",
+            "feature": delivery_component,
+            "submitted_value": delivery_component,
+            "status": "moderate_known_technique",
+            "status_label": "Moderate / known technique risk",
+            "why": "A carrier technology may be individually known; combining it with a known botanical can be challenged as predictable unless the combination produces an unexpected effect.",
+            "evidence_basis": [f"Submitted carrier: {delivery_component}", "No unexpected comparative technical effect is documented in the present case."],
+            "advisory": "Define the carrier:active ratio, physical state and critical quality attributes, then compare against a carrier-free spray.",
+        },
+        {
+            "id": "standardization",
+            "feature": "Defined botanical standardization",
+            "submitted_value": standardization,
+            "status": "moderate_range_search",
+            "status_label": "Moderate / exact-range search needed",
+            "why": "Standardization improves reproducibility, but a marker percentage is not inventive merely because it is precise; the exact range and technical effect must be compared with prior disclosures.",
+            "evidence_basis": [f"Submitted standardization: {standardization}", "Exact-range patent and non-patent comparison is incomplete."],
+            "advisory": "Search the exact marker range and link any narrower range to stability, release, uptake or clinical performance data.",
+        },
+        {
+            "id": "dose",
+            "feature": "Proposed daily exposure",
+            "submitted_value": dose,
+            "status": "weak_alone",
+            "status_label": "Weak alone",
+            "why": "Dose selection is often treated as optimization unless the selected exposure produces an unexpected or clinically meaningful result.",
+            "evidence_basis": [f"Submitted dose: {dose}", f"Dose-matched human records retained: {match_counts.get('dose_matched', 0)}."],
+            "advisory": "Use dose-ranging, exposure or bridging data; do not present the dose alone as the inventive concept.",
+        },
+        {
+            "id": "process-window",
+            "feature": "Controlled manufacturing window",
+            "submitted_value": process,
+            "status": "potentially_useful",
+            "status_label": "Potentially useful if causally linked",
+            "why": "A defined process window can support a process claim or trade secret only when specific parameters measurably change product performance or reproducibility.",
+            "evidence_basis": [f"Submitted process facts: {process}", "No parameter-to-effect study is attached."],
+            "advisory": "Run a design-of-experiments study and retain only parameters that materially affect fingerprint, stability, release, droplet size or dose uniformity.",
+        },
+        {
+            "id": "performance-target",
+            "feature": "Quantitative release/performance target",
+            "submitted_value": release,
+            "status": "strong_if_proven",
+            "status_label": "Strongest if proven comparatively",
+            "why": "A reproducible quantitative threshold tied to the claimed architecture is more defensible than naming known ingredients or dosage forms.",
+            "evidence_basis": [f"Submitted target: {release}", "Comparative validation and method suitability are not yet documented."],
+            "advisory": "Validate the method, compare against a conventional formulation and carrier-free spray, and predefine a statistically and technically meaningful threshold.",
+        },
+    ]
+
+    strength_actions = [
+        {
+            "rank": 1,
+            "title": "Complete feature-level prior-art and independent-claim comparison",
+            "impact": "critical",
+            "why": f"The current patent status is {patent_status}; the inventive contribution cannot be selected without mapping each submitted feature to retrieved claims.",
+            "what_to_test": ["Botanical + cognitive-use disclosures", "Oral/buccal metered sprays", "Phospholipid botanical carriers", "Exact marker and process ranges"],
+            "deliverable": "Counsel-reviewed novelty chart with family, legal status, claim element and missing-feature columns.",
+            "strengthens": ["Patent claim scope", "Inventive-step position", "Design-around decisions"],
+        },
+        {
+            "rank": 2,
+            "title": "Demonstrate an advantage over conventional oral Bacopa",
+            "impact": "high",
+            "why": "The current combination can be framed as known botanical + known carrier + known dosage form unless an unexpected combined technical effect is shown.",
+            "what_to_test": ["Matched conventional capsule/tablet comparator", "Carrier-free metered spray", "Release and mucosal-permeation performance", "Stability and dose uniformity"],
+            "deliverable": "Predefined comparative technical-effect report with effect sizes, uncertainty and failed endpoints retained.",
+            "strengthens": ["Inventive step", "Scientific credibility", "Exact-product differentiation"],
+        },
+        {
+            "rank": 3,
+            "title": "Narrow the phospholipid spray architecture",
+            "impact": "high",
+            "why": "The present description names the architecture, but the defensible technical boundary needs measurable composition and process parameters.",
+            "what_to_test": ["Carrier:active ratio", "Particle/droplet size distribution", "pH and shear operating windows", "Spray volume and content uniformity"],
+            "deliverable": "Critical-quality-attribute specification and parameter-to-performance design space.",
+            "strengthens": ["Composition/process claims", "Quality dossier", "Trade-secret boundary"],
+        },
+        {
+            "rank": 4,
+            "title": "Validate the exact cognitive claim at the proposed exposure",
+            "impact": "high",
+            "why": f"Current matching found {match_counts.get('direct_product', 0)} direct, {match_counts.get('dose_matched', 0)} dose-matched and {match_counts.get('formulation_matched', 0)} formulation-matched records.",
+            "what_to_test": ["Exact standardized extract and daily exposure", "Healthy-adult population", "Separate validated memory and attention endpoints", "Tolerability and adverse events"],
+            "deliverable": "Claim-to-evidence matrix and protocol for a randomized exact-formulation comparator study.",
+            "strengthens": ["Claim substantiation", "Scientific evidence readiness", "Regulatory dossier"],
+        },
+        {
+            "rank": 5,
+            "title": "Resolve market positioning before fixing label claims",
+            "impact": "medium-high",
+            "why": "The same product facts can enter different India and UK pathways depending on intended purpose, medicinal representation and exact wording.",
+            "what_to_test": ["Wellness-only versus treatment/prevention wording", "AYUSH medicine intent", "Supplement/food positioning", "Classical versus proprietary/non-classical representation"],
+            "deliverable": "Signed India/UK classification memo and controlled claims matrix.",
+            "strengthens": ["Regulatory route", "Evidence plan", "Launch claims"],
+        },
+    ]
+
+    return {
+        "feature_assessments": features,
+        "inventive_step": {
+            "level": "medium-high",
+            "finding": f"The strongest candidate is the combined {product_form} + {delivery_component} + defined standardization/performance architecture, not the broad cognitive use.",
+            "weakest_element": f"{active} cognitive use",
+            "reasoning": [
+                f"The submitted case itself identifies traditional cognitive/memory use for {active}.",
+                f"{delivery_component} is a carrier technique that must be distinguished from established delivery practice.",
+                f"{product_form} must be compared with known oral/buccal sprays.",
+                "Combining individually known elements may be treated as routine optimization.",
+                "No unexpected combined technical advantage is yet demonstrated.",
+            ],
+            "how_to_strengthen": [
+                "Quantify improved mucosal permeation or absorption against matched comparators.",
+                "Demonstrate a reproducible release, stability or dose-uniformity advantage.",
+                "Define composition and critical process windows that cause the advantage.",
+                "Claim only a performance threshold not taught by the closest mapped prior art.",
+            ],
+        },
+        "differentiation_advisor": {
+            "current": f"{delivery_component} in a {product_form}",
+            "problem": "May be viewed as a predictable use of established delivery techniques with a known botanical.",
+            "ways_to_strengthen": [
+                "Define carrier-to-botanical ratio and compositional tolerances.",
+                "Define particle/droplet size and dose-uniformity ranges.",
+                "Retain only pH, temperature and shear ranges that cause a measured effect.",
+                "Demonstrate storage and in-use stability.",
+                "Compare mucosal permeation against a conventional formulation and carrier-free spray.",
+                "Show an unexpected, reproducible performance threshold.",
+            ],
+        },
+        "change_scenarios": [
+            {
+                "change": f"Remove {delivery_component}",
+                "impacts": [
+                    {"area": "Patent differentiation", "direction": "down", "reason": "One submitted technical layer is removed."},
+                    {"area": "Formulation complexity", "direction": "down", "reason": "Fewer composition and stability variables."},
+                    {"area": "Evidence burden", "direction": "down", "reason": "No carrier-specific bridging claim."},
+                    {"area": "Potential absorption benefit", "direction": "down", "reason": "Any carrier-enabled benefit would be lost unless another architecture replaces it."},
+                ],
+            },
+            {
+                "change": "Increase daily botanical dose",
+                "impacts": [
+                    {"area": "Patent novelty impact", "direction": "low", "reason": "Dose change alone is commonly optimization."},
+                    {"area": "Clinical evidence matching", "direction": "may_improve", "reason": "Only if the new exposure matches higher-quality studies."},
+                    {"area": "Safety evidence burden", "direction": "up", "reason": "Higher exposure requires updated tolerability and interaction review."},
+                    {"area": "Regulatory scrutiny", "direction": "up", "reason": "Exposure and claims affect classification and evidence expectations."},
+                ],
+            },
+            {
+                "change": "Add comparative mucosal-permeation and release data",
+                "impacts": [
+                    {"area": "Technical-effect support", "direction": "up_up", "reason": "Directly tests the asserted architecture."},
+                    {"area": "Inventive-step position", "direction": "up", "reason": "An unexpected effect can distinguish a predictable combination."},
+                    {"area": "Scientific credibility", "direction": "up", "reason": "Product-specific evidence replaces assumption."},
+                    {"area": "Exact-product evidence", "direction": "up", "reason": "The submitted formulation is actually tested."},
+                ],
+            },
+        ],
+        "scientific_advisor": {
+            "supported": f"Ingredient-level human evidence was retained for {active}: {match_counts.get('ingredient_level', 0)} record(s).",
+            "not_supported": [
+                f"The exact {product_form} route",
+                f"The {delivery_component} system",
+                f"The submitted exposure: {dose}",
+                f"The submitted standardization: {standardization}",
+                "The combined memory + attention + overall cognitive-performance claim",
+            ],
+            "best_next_study": f"A randomized comparative study of the exact {product_form} against a matched conventional {active} formulation, measuring validated memory and attention endpoints, product exposure, safety and tolerability.",
+        },
+        "classification_resolver": {
+            "why_unresolved": f"The claim ‘{claim}’ can be classified differently depending on medicinal versus wellness positioning, the {product_form} presentation and whether the product is represented as AYUSH, supplement or another oral product.",
+            "questions": [
+                "Will the label claim treatment or prevention, or only general wellness support?",
+                "Is the product intended to be licensed and represented as an AYUSH medicine?",
+                "Will the formulation be represented as classical, proprietary or non-classical?",
+            ],
+        },
+        "strength_actions": strength_actions,
+        "notice": "Feature statuses are screening inferences tied to submitted facts and retrieved-search status. They are not patentability, safety, efficacy or classification conclusions.",
+    }
+
+
 def build_case_specific_analysis(case: Any, evidence_matches: list[dict[str, Any]], external_research: dict[str, Any]) -> dict[str, Any]:
     completeness = build_input_completeness(case)
     features = build_technical_features(case)
@@ -400,6 +644,7 @@ def build_case_specific_analysis(case: Any, evidence_matches: list[dict[str, Any
             ),
         },
         "specific_recommendations": _specific_recommendations(case, completeness, patents, studies),
+        "technical_advisory": build_technical_advisory(case, patents, match_counts),
         "data_requests": [
             {"field": item["key"], "question": item["request"], "blocks": item["blocks"]}
             for item in completeness["missing"]

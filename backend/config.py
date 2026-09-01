@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     registration_enabled: bool = True
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
-    corpus_version: str = "2026-09-01.official-registry.7"
+    corpus_version: str = "2026-09-01.official-registry.8"
     embedding_provider: str = "deterministic"
     embedding_url: str = "http://localhost:8081/v1"
     embedding_api_key: str | None = None

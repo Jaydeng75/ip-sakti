@@ -243,7 +243,7 @@ function AnalysisWorkspace({ analysis }: { analysis: AnalysisResponse }) {
 
         <div className="space-y-3">
           {result.risk_cards.map((card) => (
-            <div key={card.key} className="rounded-2xl border border-border bg-surface p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-semibold">{card.title}</p><p className="mt-2 text-xs leading-5 text-ink-muted">{card.summary}</p></div><div className="text-right"><p className="text-2xl font-semibold text-accent">{card.score}</p><p className="font-mono text-[9px] uppercase text-ink-muted">{card.level}</p></div></div></div>
+            <div key={card.key} className="rounded-2xl border border-border bg-surface p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-semibold">{card.title}</p><p className="mt-2 text-xs font-medium leading-5 text-ink">{card.finding ?? card.primary_finding}</p><p className="mt-2 text-xs leading-5 text-ink-muted">{card.fix ?? card.summary}</p></div><div className="text-right"><p className="text-lg font-semibold text-accent">{card.display_value ?? card.score}</p><p className="font-mono text-[9px] uppercase text-ink-muted">{card.level}</p></div></div></div>
           ))}
         </div>
       </div>

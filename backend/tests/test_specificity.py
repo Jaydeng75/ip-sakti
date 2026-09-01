@@ -68,6 +68,12 @@ def test_case_specific_analysis_preserves_exact_facts_and_passages():
     assert "TKDLSearch.asp" in result["traditional_knowledge"]["search_url"]
     assert result["traditional_knowledge"]["integration_mode"] == "official_search_handoff_and_authorized_export_import"
     assert any(row["status"] == "overlap_found" for row in result["novelty_claim_chart"])
+    advisory = result["technical_advisory"]
+    assert len(advisory["feature_assessments"]) >= 7
+    assert len(advisory["strength_actions"]) == 5
+    assert len(advisory["change_scenarios"]) == 3
+    assert advisory["inventive_step"]["reasoning"]
+    assert advisory["classification_resolver"]["questions"]
     design = build_specific_design_around(case, result, ["Patent"], [])
     assert len(design["alternatives"]) == 4
     assert all(item["basis"].startswith("Submitted fact:") for item in design["alternatives"])

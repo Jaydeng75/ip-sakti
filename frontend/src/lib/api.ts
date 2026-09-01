@@ -68,6 +68,10 @@ export type RiskCard = {
   negative_signals?: string[];
   missing_evidence?: string[];
   what_changes_score?: string[];
+  finding?: string;
+  why?: string;
+  evidence_basis?: string[];
+  fix?: string;
   claim_type?: "inference";
   citations?: Citation[];
 };
@@ -226,6 +230,42 @@ export type AnalysisResult = {
       limitation: string;
     };
     scientific_studies: ScientificStudyCollection;
+    technical_advisory: {
+      feature_assessments: Array<{
+        id: string;
+        feature: string;
+        submitted_value: string;
+        status: string;
+        status_label: string;
+        why: string;
+        evidence_basis: string[];
+        advisory: string;
+      }>;
+      inventive_step: {
+        level: string;
+        finding: string;
+        weakest_element: string;
+        reasoning: string[];
+        how_to_strengthen: string[];
+      };
+      differentiation_advisor: { current: string; problem: string; ways_to_strengthen: string[] };
+      change_scenarios: Array<{
+        change: string;
+        impacts: Array<{ area: string; direction: string; reason: string }>;
+      }>;
+      scientific_advisor: { supported: string; not_supported: string[]; best_next_study: string };
+      classification_resolver: { why_unresolved: string; questions: string[] };
+      strength_actions: Array<{
+        rank: number;
+        title: string;
+        impact: string;
+        why: string;
+        what_to_test: string[];
+        deliverable: string;
+        strengthens: string[];
+      }>;
+      notice: string;
+    };
     specific_recommendations: Array<{
       title: string;
       basis: string;
