@@ -22,7 +22,9 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Docker consumes Next's standalone server, while Vercel performs its own
+  // output tracing and packaging during deployment.
+  output: process.env.VERCEL ? undefined : "standalone",
   poweredByHeader: false,
   async headers() {
     return [

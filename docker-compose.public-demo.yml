@@ -1,0 +1,6 @@
+services:
+  backend:
+    environment:
+      IPSAKTI_ALLOWED_ORIGINS: ${IPSAKTI_PUBLIC_FRONTEND_ORIGIN:?Set the exact public frontend origin}
+      IPSAKTI_PUBLIC_API_URL: ${IPSAKTI_PUBLIC_API_URL:?Set the public backend URL}
+
