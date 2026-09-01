@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { logout } from "@/lib/api";
+import { AuthUser, getStoredUser, logout, onAuthChanged } from "@/lib/api";
 
 const links = [
   ["Dashboard", "/dashboard"],
@@ -22,7 +22,26 @@ const links = [
 
 export default function Sidebar() {
   const [open, setOpen] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const refresh = () => setUser(getStoredUser());
+    refresh();
+    return onAuthChanged(refresh);
+  }, []);
+
+  async function signOut() {
+    setSigningOut(true);
+    try {
+      await logout();
+      setOpen(false);
+      router.replace("/login");
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   return (
     <>
@@ -122,14 +141,18 @@ export default function Sidebar() {
 
         {/* FOOTER */}
         <div className="relative mt-auto border-t border-white/70 px-8 py-6">
-          <p className="text-sm font-semibold tracking-tight text-[#16212B]">
-            IP-SAKTI <span className="text-[#0F6B5C]">360</span>
-          </p>
-
-          <p className="mt-1 text-[10px] uppercase tracking-[0.18em] text-[#7A847F]">
-            Controlled workspace
-          </p>
-          <button type="button" onClick={() => { logout(); router.push("/login"); }} className="mt-4 text-xs font-semibold text-[#0F6B5C] hover:underline">Sign out</button>
+          {user ? (
+            <>
+              <p className="truncate text-sm font-semibold tracking-tight text-[#16212B]">{user.display_name}</p>
+              <p className="mt-1 truncate text-[10px] text-[#7A847F]">{user.email}</p>
+              <button type="button" disabled={signingOut} onClick={() => void signOut()} className="mt-4 text-xs font-semibold text-[#0F6B5C] hover:underline disabled:opacity-50">{signingOut ? "Signing out…" : "Sign out"}</button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold tracking-tight text-[#16212B]">Secure analyst workspace</p>
+              <div className="mt-4 flex items-center gap-4"><Link href="/login" onClick={() => setOpen(false)} className="text-xs font-semibold text-[#0F6B5C] hover:underline">Sign in</Link><Link href="/signup" onClick={() => setOpen(false)} className="rounded-lg bg-[#0F6B5C] px-3 py-2 text-xs font-semibold text-white">Create account</Link></div>
+            </>
+          )}
         </div>
       </aside>
     </>

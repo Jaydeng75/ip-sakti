@@ -2,7 +2,23 @@ export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
 const TOKEN_KEY = "ip-sakti-token";
+const USER_KEY = "ip-sakti-user";
 const DEVICE_KEY = "ip-sakti-device-credentials";
+const CASE_KEY = "ip-sakti-current-case";
+const AUTH_EVENT = "ip-sakti:auth-changed";
+
+export type AuthUser = {
+  id: number;
+  email: string;
+  display_name: string;
+  role: string;
+};
+
+type AuthSession = {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+};
 
 type ApiErrorPayload = {
   detail?: string | Array<{ msg?: string; loc?: Array<string | number> }>;
@@ -15,6 +31,47 @@ function apiErrorMessage(payload: ApiErrorPayload | null, fallback: string) {
     if (messages.length) return messages.join(" ");
   }
   return fallback;
+}
+
+function notifyAuthChanged() {
+  window.dispatchEvent(new Event(AUTH_EVENT));
+}
+
+function storeSession(session: AuthSession) {
+  window.localStorage.setItem(TOKEN_KEY, session.access_token);
+  window.localStorage.setItem(USER_KEY, JSON.stringify(session.user));
+  notifyAuthChanged();
+  return session;
+}
+
+function clearSession() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem(USER_KEY);
+  window.localStorage.removeItem(CASE_KEY);
+  window.sessionStorage.removeItem("ip-sakti-analysis-draft");
+  notifyAuthChanged();
+}
+
+export function getStoredUser(): AuthUser | null {
+  if (typeof window === "undefined") return null;
+  const value = window.localStorage.getItem(USER_KEY);
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as AuthUser;
+  } catch {
+    window.localStorage.removeItem(USER_KEY);
+    return null;
+  }
+}
+
+export function hasStoredSession() {
+  return typeof window !== "undefined" && Boolean(window.localStorage.getItem(TOKEN_KEY));
+}
+
+export function onAuthChanged(listener: () => void) {
+  window.addEventListener(AUTH_EVENT, listener);
+  return () => window.removeEventListener(AUTH_EVENT, listener);
 }
 
 export type ApiCase = {
@@ -489,7 +546,7 @@ async function issueLocalSession() {
     throw new Error("Sign in with an approved IP-SAKTI account to continue.");
   }
   const demo = await fetch(`${API_BASE_URL}/auth/demo`, { method: "POST" });
-  if (demo.ok) return demo.json() as Promise<{ access_token: string }>;
+  if (demo.ok) return demo.json() as Promise<AuthSession>;
 
   const credentials = deviceCredentials();
   const registration = await fetch(`${API_BASE_URL}/auth/register`, {
@@ -501,7 +558,7 @@ async function issueLocalSession() {
     }),
   });
   if (registration.ok) {
-    return registration.json() as Promise<{ access_token: string }>;
+    return registration.json() as Promise<AuthSession>;
   }
   if (registration.status === 409) {
     const login = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -509,7 +566,7 @@ async function issueLocalSession() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(credentials),
     });
-    if (login.ok) return login.json() as Promise<{ access_token: string }>;
+    if (login.ok) return login.json() as Promise<AuthSession>;
   }
   throw new Error("Unable to establish a secure API session.");
 }
@@ -521,8 +578,7 @@ async function token() {
   const existing = window.localStorage.getItem(TOKEN_KEY);
   if (existing) return existing;
   const session = await issueLocalSession();
-  window.localStorage.setItem(TOKEN_KEY, session.access_token);
-  return session.access_token;
+  return storeSession(session).access_token;
 }
 
 export async function login(email: string, password: string) {
@@ -535,13 +591,50 @@ export async function login(email: string, password: string) {
     const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
     throw new Error(apiErrorMessage(payload, "Sign-in failed."));
   }
-  const session = (await response.json()) as { access_token: string; user: { display_name: string } };
-  window.localStorage.setItem(TOKEN_KEY, session.access_token);
-  return session;
+  return storeSession((await response.json()) as AuthSession);
 }
 
-export function logout() {
-  window.localStorage.removeItem(TOKEN_KEY);
+export async function signup(displayName: string, email: string, password: string) {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ display_name: displayName, email, password }),
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
+    throw new Error(apiErrorMessage(payload, "Account creation failed."));
+  }
+  return storeSession((await response.json()) as AuthSession);
+}
+
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  if (typeof window === "undefined") return null;
+  const accessToken = window.localStorage.getItem(TOKEN_KEY);
+  if (!accessToken) return null;
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    clearSession();
+    return null;
+  }
+  const user = (await response.json()) as AuthUser;
+  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+  return user;
+}
+
+export async function logout() {
+  const accessToken = typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
+  try {
+    if (accessToken) {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+    }
+  } finally {
+    clearSession();
+  }
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -553,9 +646,13 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   }
   let response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
   if (response.status === 401) {
-    window.localStorage.removeItem(TOKEN_KEY);
-    headers.set("Authorization", `Bearer ${await token()}`);
-    response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+    clearSession();
+    if (process.env.NEXT_PUBLIC_DEMO_AUTH === "true") {
+      headers.set("Authorization", `Bearer ${await token()}`);
+      response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+    } else {
+      throw new Error("Your session expired. Sign in again to continue.");
+    }
   }
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;

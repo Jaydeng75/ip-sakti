@@ -379,11 +379,17 @@ def current_user(
     try:
         payload = decode_access_token(credentials.credentials)
         user_id = int(payload["sub"])
+        token_id = str(payload["jti"])
     except (jwt.PyJWTError, KeyError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired access token",
         ) from None
+    if db.scalar(select(models.RevokedToken).where(models.RevokedToken.jti == token_id)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Access token has been signed out",
+        )
     user = db.get(models.User, user_id)
     if not user or not user.is_active:
         raise HTTPException(
@@ -518,6 +524,27 @@ def demo_login(db: Db):
 @app.get(f"{settings.api_prefix}/auth/me", response_model=UserResponse, tags=["auth"])
 def me(user: CurrentUser):
     return user
+
+
+@app.post(f"{settings.api_prefix}/auth/logout", status_code=204, tags=["auth"])
+def logout(
+    db: Db,
+    user: CurrentUser,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
+):
+    payload = decode_access_token(credentials.credentials)
+    token_id = str(payload["jti"])
+    if not db.scalar(select(models.RevokedToken).where(models.RevokedToken.jti == token_id)):
+        db.add(
+            models.RevokedToken(
+                jti=token_id,
+                user_id=user.id,
+                expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            )
+        )
+    audit(db, user.id, "user.logged_out", "user", user.id)
+    db.commit()
+    return Response(status_code=204)
 
 
 @app.get(f"{settings.api_prefix}/cases", response_model=list[CaseResponse], tags=["cases"])

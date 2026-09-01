@@ -1,14 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
+import { AuthUser, getStoredUser, onAuthChanged } from "@/lib/api";
 
 export default function Home() {
   const [description, setDescription] = useState("");
+  const [user, setUser] = useState<AuthUser | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const refresh = () => setUser(getStoredUser());
+    refresh();
+    return onAuthChanged(refresh);
+  }, []);
 
   function analyze() {
     if (description.trim()) {
@@ -43,8 +51,13 @@ export default function Home() {
           <span>About</span>
         </nav>
 
-        <div className="font-mono text-xs text-ink-muted">
-          INDIA · 01
+        <div className="flex items-center gap-3">
+          <span className="hidden font-mono text-xs text-ink-muted lg:inline">INDIA · 01</span>
+          {user ? (
+            <Link href="/dashboard" className="rounded-xl bg-accent px-4 py-2.5 text-xs font-semibold text-white">Open dashboard</Link>
+          ) : (
+            <><Link href="/login" className="text-xs font-semibold text-accent">Sign in</Link><Link href="/signup" className="rounded-xl bg-accent px-4 py-2.5 text-xs font-semibold text-white">Create account</Link></>
+          )}
         </div>
       </header>
 

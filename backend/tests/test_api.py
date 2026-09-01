@@ -45,6 +45,34 @@ def sample_case() -> dict:
     }
 
 
+def test_registration_login_and_logout_lifecycle():
+    with TestClient(app) as client:
+        email = f"auth-{uuid.uuid4().hex}@example.com"
+        password = "correct-horse-battery-staple"
+        registration = client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "display_name": "Auth Analyst", "password": password},
+        )
+        assert registration.status_code == 201, registration.text
+        registration_body = registration.json()
+        assert registration_body["user"]["email"] == email
+        headers = {"Authorization": f"Bearer {registration_body['access_token']}"}
+
+        assert client.get("/api/v1/auth/me", headers=headers).status_code == 200
+        assert client.post("/api/v1/auth/logout", headers=headers).status_code == 204
+        assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
+
+        duplicate = client.post(
+            "/api/v1/auth/register",
+            json={"email": email.upper(), "display_name": "Auth Analyst", "password": password},
+        )
+        assert duplicate.status_code == 409
+
+        login = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+        assert login.status_code == 200, login.text
+        assert login.json()["access_token"] != registration_body["access_token"]
+
+
 def test_authenticated_case_analysis_and_grounded_answer():
     with TestClient(app) as client:
         headers = auth_headers(client)
