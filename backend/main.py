@@ -201,6 +201,35 @@ def seed_demo_cases(db: Session, user: models.User) -> None:
             "biological_sourcing": "Domestic cultivated resources sourced through three Indian suppliers",
             "metadata_json": {"manufacturing_process": "Low-temperature drying, milling and fixed-ratio blending", "brand": "Prana Infusion"},
         },
+        {
+            "title": "BrahmiQ Bacopa Oral-Mucosal Spray",
+            "description": "A standardized Bacopa monnieri oral-mucosal spray using a phospholipid-based delivery system designed for rapid absorption and controlled dosing for cognitive-support applications.",
+            "ingredients": [
+                "Bacopa monnieri standardized extract",
+                "Phosphatidylcholine",
+                "Glycerol",
+                "Xylitol",
+                "Purified water",
+                "Natural mint flavour",
+            ],
+            "product_form": "Metered-dose oral spray",
+            "intended_use": "Supports memory, attention and cognitive performance in healthy adults.",
+            "target_markets": ["India", "United Kingdom"],
+            "classical_formulation": False,
+            "biological_sourcing": "Bacopa monnieri cultivated and sourced through a registered supplier in Kerala, India, with batch, supplier and collection records maintained.",
+            "metadata_json": {
+                "manufacturing_process": "Standardized Bacopa extract is incorporated into a phospholipid dispersion under controlled shear and pH, followed by filtration and filling into calibrated metered-dose oral spray containers.",
+                "quantitative_composition": "Bacopa monnieri extract equivalent to 150 mg per daily dose; phosphatidylcholine 2% w/v; glycerol 5% w/v; xylitol 3% w/v; purified water q.s.",
+                "standardization": "Bacopa extract standardized to 50% total bacosides; bacoside A used as the primary analytical marker with HPLC fingerprinting for batch consistency.",
+                "extraction_ratio": "Bacopa monnieri aerial-part extract, DER 8:1, hydroethanolic extraction using 60% ethanol followed by concentration and standardization.",
+                "dose": "Two metered sprays twice daily, providing approximately 150 mg Bacopa extract per day, for up to 12 weeks.",
+                "release_profile": "Target rapid oral-mucosal dispersion with at least 80% active release within 20 minutes in an in-vitro dissolution/release model.",
+                "process_parameters": "pH 5.5-6.5; mixing temperature below 35 degrees Celsius; phospholipid incorporation under controlled shear; spray dose volume 0.15 mL plus or minus 10%.",
+                "proposed_claim": "Supports memory, attention and cognitive performance in healthy adults when used daily.",
+                "classical_reference": "Bacopa monnieri has documented traditional use in Ayurveda for cognitive and memory-related purposes, but this specific metered oral-spray delivery system is not claimed as a classical formulation.",
+                "brand": "BrahmiQ",
+            },
+        },
     ]
     existing_titles = set(
         db.scalars(select(models.InnovationCase.title).where(models.InnovationCase.owner_id == user.id))
