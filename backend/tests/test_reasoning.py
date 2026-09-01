@@ -96,6 +96,13 @@ def test_reasoning_rejects_unverified_source_id():
         reasoning._validate_advisory(advisory, context)
 
 
+def test_response_schema_only_allows_verified_source_ids():
+    schema = reasoning._response_schema(["PMID-123", "PMC-456"])
+
+    assert schema["properties"]["source_ids"]["items"]["enum"] == ["PMID-123", "PMC-456"]
+    assert "enum" not in reasoning.RESPONSE_SCHEMA["properties"]["source_ids"]["items"]
+
+
 def test_reasoning_rejects_unsupported_number():
     context = reasoning._reasoning_context(sample_case(), "Question", deterministic_result(), None)
     advisory = GroundedAdvisory(

@@ -87,7 +87,7 @@ def _case_context(case: Any) -> dict[str, Any]:
     }
 
 
-def _analysis_context(analysis: dict[str, Any] | None) -> dict[str, Any]:
+def _analysis_context(analysis: dict[str, Any] | None, intent: str | None) -> dict[str, Any]:
     if not analysis:
         return {}
     specific = analysis.get("case_specific_analysis", {})
@@ -95,35 +95,68 @@ def _analysis_context(analysis: dict[str, Any] | None) -> dict[str, Any]:
     studies = specific.get("scientific_studies", {})
     traditional = specific.get("traditional_knowledge", {})
     technical = specific.get("technical_advisory", {})
-    return {
-        "classification": analysis.get("classification", {}),
+    classification = analysis.get("classification", {})
+    context: dict[str, Any] = {
+        "classification": {
+            "label": classification.get("label"),
+            "pathway": classification.get("pathway"),
+            "status": classification.get("status"),
+            "candidate_pathways": classification.get("candidate_pathways", [])[:4],
+            "decision_factors": classification.get("decision_factors", [])[:6],
+        },
         "decision_brief": analysis.get("decision_brief", {}),
-        "screening_cards": analysis.get("risk_cards", []),
-        "patent_screen": {
+    }
+    if intent == "SCIENTIFIC_EVIDENCE":
+        context["scientific_screen"] = {
+            "status": studies.get("status"),
+            "match_counts": studies.get("match_counts", {}),
+            "full_text_appraised_count": studies.get("full_text_appraised_count"),
+            "abstract_only_count": studies.get("abstract_only_count"),
+            "notice": studies.get("notice"),
+        }
+    elif intent == "PATENT":
+        context["patent_screen"] = {
             "status": patents.get("status"),
             "provider": patents.get("provider"),
             "family_count": patents.get("family_count"),
             "coverage_note": patents.get("coverage_note"),
             "limitation": patents.get("limitation"),
             "candidate_titles": [record.get("title") for record in patents.get("records", [])[:5]],
-        },
-        "scientific_screen": {
-            "status": studies.get("status"),
-            "match_counts": studies.get("match_counts", {}),
-            "evidence_layers": studies.get("evidence_layers", {}),
-            "notice": studies.get("notice"),
-        },
-        "traditional_knowledge_screen": {
-            "risk": traditional.get("risk"),
-            "findings": traditional.get("findings", []),
-            "integration_mode": traditional.get("integration_mode"),
-        },
-        "technical_advisory": {
+        }
+        context["technical_advisory"] = {
             "inventive_step": technical.get("inventive_step", {}),
-            "strength_actions": technical.get("strength_actions", []),
-            "feature_assessments": technical.get("feature_assessments", []),
-        },
-    }
+            "strength_actions": technical.get("strength_actions", [])[:5],
+            "feature_assessments": [
+                {
+                    key: feature.get(key)
+                    for key in ("feature", "submitted_value", "status_label", "why", "advisory")
+                }
+                for feature in technical.get("feature_assessments", [])[:5]
+            ],
+        }
+    elif intent == "TRADITIONAL_KNOWLEDGE":
+        context["traditional_knowledge_screen"] = {
+            "risk": traditional.get("risk"),
+            "findings": traditional.get("findings", [])[:6],
+            "integration_mode": traditional.get("integration_mode"),
+            "limitation": traditional.get("limitation"),
+        }
+    else:
+        relevant_key = "abs" if intent == "ABS" else "regulatory" if intent == "REGULATORY" else None
+        cards = analysis.get("risk_cards", [])
+        if relevant_key:
+            cards = [card for card in cards if relevant_key in str(card.get("key", "")).lower()]
+        context["screening_findings"] = [
+            {
+                "title": card.get("title"),
+                "level": card.get("level"),
+                "primary_finding": card.get("primary_finding"),
+                "missing_evidence": card.get("missing_evidence", [])[:3],
+                "fix": card.get("fix"),
+            }
+            for card in cards[:5]
+        ]
+    return context
 
 
 def _reasoning_context(
@@ -148,14 +181,22 @@ def _reasoning_context(
     return {
         "question": question,
         "case": _case_context(case),
-        "verified_analysis": _analysis_context(analysis),
+        "verified_analysis": _analysis_context(analysis, deterministic_result.get("intent")),
         "evidence_controlled_conclusion": deterministic_result.get("answer"),
         "intent": deterministic_result.get("intent"),
         "claim_type": deterministic_result.get("claim_type"),
         "confidence_label": deterministic_result.get("confidence_label"),
         "evidence_summary": deterministic_result.get("evidence_summary"),
         "allowed_sources": citations,
+        "allowed_source_ids": [str(citation["id"]) for citation in citations if citation.get("id")],
     }
+
+
+def _response_schema(allowed_source_ids: list[str]) -> dict[str, Any]:
+    """Constrain generated citations to IDs already selected by retrieval."""
+    schema = copy.deepcopy(RESPONSE_SCHEMA)
+    schema["properties"]["source_ids"]["items"]["enum"] = allowed_source_ids
+    return schema
 
 
 def _numbers(value: Any) -> set[str]:
@@ -205,6 +246,9 @@ async def _cloudflare_reasoning(context: dict[str, Any]) -> GroundedAdvisory:
         "Every response must cite one or more exact IDs from allowed_sources in source_ids. "
         "Return only the requested JSON. Provide a concise rationale, not private chain-of-thought."
     )
+    allowed_source_ids = context.get("allowed_source_ids", [])
+    if not allowed_source_ids:
+        raise ReasoningProviderError("No verified source IDs were supplied to the reasoning provider.")
     payload = {
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -212,7 +256,10 @@ async def _cloudflare_reasoning(context: dict[str, Any]) -> GroundedAdvisory:
         ],
         "temperature": 0.1,
         "max_tokens": settings.llm_max_output_tokens,
-        "response_format": {"type": "json_schema", "json_schema": RESPONSE_SCHEMA},
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": _response_schema(allowed_source_ids),
+        },
     }
     headers = {"Authorization": f"Bearer {settings.llm_api_key}", "Content-Type": "application/json"}
     try:
