@@ -11,6 +11,7 @@ Source-grounded innovation intelligence for Ayurvedic and biological-resource pr
 - Hybrid evidence-retrieval and grounded screening engine with explicit confidence, source status, jurisdiction, effective date, limitations and safe abstention.
 - Product classification, innovation genome, TK/prior-art graph, evidence separation, multi-route IP strategy, six-step regulatory/ABS flow and India/EU/US/international comparison.
 - Split-screen Ask IP-SAKTI experience with clickable official citations and claim-type labels.
+- Optional guarded LLM explanation layer with structured output, citation allow-listing, numeric-consistency checks and deterministic fallback; the evidence engine remains the source of truth.
 - IndicTrans2 multilingual input/output for all 22 scheduled Indian languages, with explicit machine-translation provenance and the authoritative English answer retained.
 - Evidence uploads restricted to PDF/TXT/DOCX, format and expansion checked, optionally scanned by ClamAV, stored with SHA-256 integrity metadata, extracted, chunked and indexed.
 - Case-document retrieval uses a configurable multilingual embedding provider, PostgreSQL full-text/pgvector candidate prefetch and a configurable reranker. Development retains an explicitly labelled deterministic outage fallback.
@@ -23,7 +24,7 @@ Source-grounded innovation intelligence for Ayurvedic and biological-resource pr
 - Human expert-review requests and branded PDF decision records with evidence registers, run/corpus identifiers and report hashes.
 - Tamper-evident SHA-256 audit chaining, case-level audit history and administrator integrity verification.
 - Alembic-managed schema baseline, controlled production Compose overlay, request rate limits, trusted hosts and browser/API security headers.
-- Three pre-analysed demo cases are seeded for the local demo account.
+- Four pre-analysed demo cases are seeded for the local demo account.
 - SQLite for simple local development and PostgreSQL in the supplied Compose stack.
 - Backend tests, Python linting, frontend linting and production builds.
 
@@ -200,6 +201,23 @@ The warm-up validates the embedding dimensions and neural reranker response, rei
 `POST /api/v1/cases/{case_id}/reindex` queues a versioned reindex job. `GET /api/v1/cases/{case_id}/reindex-jobs` exposes its status. Administrators can snapshot curated sources with `POST /api/v1/admin/sources/monitor`; detected changes remain review flags and are never silently treated as updated legal conclusions.
 
 Traditional use is kept explicitly separate from clinically established efficacy. Jurisdictions are not merged into one rule set. Treaty status is described separately from domestic implementation.
+
+## Guarded LLM reasoning
+
+Ask IP-SAKTI can add a case-specific explanation after deterministic routing, retrieval and evidence synthesis. The LLM receives only submitted case facts, selected analysis fields, the evidence-controlled conclusion and the citations already approved for the answer. It cannot replace the controlled conclusion or confidence score. Its structured JSON is rejected if it references an unknown source ID, introduces an unsupported number, asserts a prohibited conclusive outcome or fails schema validation. Any provider error, quota exhaustion or validation failure returns the original deterministic answer.
+
+The zero-overage configuration uses Cloudflare Workers AI on the Workers Free plan. Create a Workers AI token with only Workers AI read/edit permissions, keep the account on the Free plan, and set:
+
+```dotenv
+IPSAKTI_LLM_ENABLED=true
+IPSAKTI_LLM_PROVIDER=cloudflare
+IPSAKTI_LLM_ACCOUNT_ID=your-cloudflare-account-id
+IPSAKTI_LLM_API_KEY=your-workers-ai-token
+IPSAKTI_LLM_MODEL=@cf/meta/llama-3.1-8b-instruct-fast
+IPSAKTI_LLM_ALLOW_FALLBACK=true
+```
+
+Do not expose the token through a `NEXT_PUBLIC_` variable or commit it to Git. Cloudflare's daily free allocation is an external service limit and may change; on a Workers Free account, exhausted requests fail and IP-SAKTI falls back instead of purchasing overage capacity.
 
 ## Deployment and demonstration
 

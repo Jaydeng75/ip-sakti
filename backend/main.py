@@ -68,6 +68,7 @@ from services.intelligence import (
 from services.jobs import run_reindex_job
 from services.observability import configure_observability
 from services.rate_limit import InMemoryRateLimitMiddleware
+from services.reasoning import apply_reasoning_layer
 from services.reporting import build_pdf_report
 from services.retrieval import embedding_identity
 from services.source_monitor import check_source, public_snapshot
@@ -685,11 +686,18 @@ async def ask(case_id: int, payload: AskRequest, db: Db, user: CurrentUser):
             .order_by(desc(models.AnalysisRun.created_at))
             .limit(1)
         )
+        analysis_result = analysis_run.result if analysis_run else None
         result = answer_question(
             case,
             input_translation.text,
             evidence_matches,
-            analysis_run.result if analysis_run else None,
+            analysis_result,
+        )
+        result = await apply_reasoning_layer(
+            case,
+            input_translation.text,
+            result,
+            analysis_result,
         )
 
     authoritative_answer = result["answer"]

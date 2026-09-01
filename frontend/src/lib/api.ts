@@ -450,6 +450,17 @@ export type AskResponse = {
   citations: Citation[];
   requires_human_review: boolean;
   limitations: string[];
+  reasoning: {
+    status: "deterministic" | "grounded_llm" | "deterministic_fallback" | "skipped_unsupported";
+    provider: string;
+    model: string | null;
+    fallback_used: boolean;
+    finding: string | null;
+    weak_points: string[];
+    missing_evidence: string[];
+    recommended_actions: string[];
+    source_ids: string[];
+  };
 };
 
 export type TranslationInfo = {

@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     reranker_revision: str = "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e"
     reranker_timeout_seconds: float = 60.0
     reranker_allow_fallback: bool = True
+    llm_enabled: bool = False
+    llm_provider: str = "none"
+    llm_account_id: str | None = None
+    llm_api_key: str | None = None
+    llm_model: str = "@cf/meta/llama-3.1-8b-instruct-fast"
+    llm_timeout_seconds: float = 45.0
+    llm_max_output_tokens: int = 900
+    llm_allow_fallback: bool = True
     source_monitor_timeout_seconds: float = 15.0
     source_monitor_max_bytes: int = 5 * 1024 * 1024
     external_research_enabled: bool = False

@@ -112,6 +112,18 @@ class TranslationInfo(BaseModel):
     machine_translated: bool = False
 
 
+class ReasoningInfo(BaseModel):
+    status: Literal["deterministic", "grounded_llm", "deterministic_fallback", "skipped_unsupported"] = "deterministic"
+    provider: str = "deterministic"
+    model: str | None = None
+    fallback_used: bool = False
+    finding: str | None = None
+    weak_points: list[str] = Field(default_factory=list)
+    missing_evidence: list[str] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=list)
+    source_ids: list[str] = Field(default_factory=list)
+
+
 class AskResponse(BaseModel):
     answer: str
     authoritative_answer: str
@@ -129,6 +141,7 @@ class AskResponse(BaseModel):
     citations: list[Citation]
     requires_human_review: bool
     limitations: list[str]
+    reasoning: ReasoningInfo = Field(default_factory=ReasoningInfo)
 
 
 class ExpertReviewCreate(BaseModel):
