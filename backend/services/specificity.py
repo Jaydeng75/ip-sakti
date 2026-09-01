@@ -251,6 +251,12 @@ def build_case_specific_analysis(case: Any, evidence_matches: list[dict[str, Any
     uploaded_studies = _uploaded_study_records(case, evidence_matches)
     live_studies = external_research.get("science", {}).get("records", [])
     studies = [*uploaded_studies, *live_studies]
+    full_text_appraised_count = sum(
+        record.get("source_status") == "pmc_full_text_appraised" for record in live_studies
+    )
+    abstract_only_count = sum(
+        record.get("source_status") == "pubmed_abstract_only" for record in live_studies
+    )
     tk_query = " ".join([*(case.ingredients or []), _value(case, "classical_reference"), case.intended_use or ""]).strip()
     return {
         "input_completeness": completeness,
@@ -270,7 +276,14 @@ def build_case_specific_analysis(case: Any, evidence_matches: list[dict[str, Any
             "records": studies,
             "uploaded_record_count": len(uploaded_studies),
             "live_record_count": len(live_studies),
-            "notice": "Traditional use is not equivalent to clinically established efficacy. Abstract extraction is not full-text critical appraisal.",
+            "full_text_appraised_count": full_text_appraised_count,
+            "abstract_only_count": abstract_only_count,
+            "notice": (
+                "Traditional use is not equivalent to clinically established efficacy. "
+                f"PMC full text was structurally appraised for {full_text_appraised_count} live record(s); "
+                "remaining records are abstract- or uploaded-passage-level. Automated appraisal is not "
+                "a substitute for RoB 2, ROBINS-I or qualified expert review."
+            ),
         },
         "specific_recommendations": _specific_recommendations(case, completeness, patents, studies),
         "data_requests": [

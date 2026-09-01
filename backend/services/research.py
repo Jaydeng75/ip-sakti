@@ -338,6 +338,247 @@ def _study_field(abstract: str, patterns: list[str], fallback: str) -> str:
     return fallback
 
 
+def _local_nodes(element: ElementTree.Element, name: str) -> list[ElementTree.Element]:
+    return [node for node in element.iter() if node.tag.rsplit("}", 1)[-1] == name]
+
+
+def _pmc_sections(article: ElementTree.Element) -> dict[str, str]:
+    sections: dict[str, str] = {}
+    for section in _local_nodes(article, "sec"):
+        title_node = next((node for node in list(section) if node.tag.rsplit("}", 1)[-1] == "title"), None)
+        title = _element_text(title_node).lower()
+        if not title:
+            continue
+        section_paragraphs = [_element_text(node) for node in _local_nodes(section, "p")]
+        text = _clean(" ".join(item for item in section_paragraphs if item))
+        if text:
+            sections[title] = text[:30_000]
+    return sections
+
+
+def _section_text(sections: dict[str, str], names: tuple[str, ...]) -> str:
+    return _clean(" ".join(text for title, text in sections.items() if any(name in title for name in names)))
+
+
+def _appraisal_field(
+    sources: list[tuple[str, str]], patterns: list[str], fallback: str
+) -> tuple[str, str | None]:
+    for locator, content in sources:
+        for sentence in re.split(r"(?<=[.!?])\s+", content):
+            if any(re.search(pattern, sentence, re.IGNORECASE) for pattern in patterns):
+                return _clean(sentence)[:450], locator
+    return fallback, None
+
+
+def _pmc_identifier(article: ElementTree.Element) -> str | None:
+    for identifier in _local_nodes(article, "article-id"):
+        if identifier.attrib.get("pub-id-type") in {"pmc", "pmcid"}:
+            value = _element_text(identifier)
+            return value if value.upper().startswith("PMC") else f"PMC{value}"
+    return None
+
+
+def _study_reporting_screen(article: ElementTree.Element, whole_text: str) -> dict[str, Any]:
+    title = _element_text(next(iter(_local_nodes(article, "article-title")), None))
+    classification_text = f"{title} {whole_text[:8_000]}"
+    if re.search(r"\bsystematic review\b|\bmeta-analysis\b", classification_text, re.IGNORECASE):
+        study_type = "systematic_review"
+        framework = "Systematic-review reporting signals"
+        signal_patterns = {
+            "search_strategy": r"\bsearch strateg|\bsearch terms?\b|\b(?:pubmed|medline|embase|scopus|cochrane)\b",
+            "eligibility_criteria": r"\beligibility criteria\b|\binclusion criteria\b|\bexclusion criteria\b",
+            "independent_screening": r"\b(?:two|2) (?:independent )?reviewers?\b|\bindependently (?:screened|reviewed|assessed)\b",
+            "quality_appraisal": r"\brisk of bias\b|\bquality assessment\b|\bquality appraisal\b",
+            "protocol_registration": r"\bPROSPERO\b|\bprotocol (?:was )?registered\b",
+            "publication_bias": r"\bpublication bias\b|\bfunnel plot\b|\begger(?:'s)? test\b",
+        }
+    elif re.search(r"\brandomi[sz]|\brandomly (?:allocated|assigned)\b", classification_text, re.IGNORECASE):
+        study_type = "randomized_trial"
+        framework = "Randomized-trial reporting signals"
+        signal_patterns = {
+            "randomization": r"\brandomi[sz]|\brandomly (?:allocated|assigned)\b",
+            "allocation_concealment": r"\ballocation conceal",
+            "blinding": r"\b(?:double|single|triple)[- ]blind|\bmasked\b",
+            "comparator": r"\bplacebo\b|\bcontrol group\b|\bcomparator\b",
+            "attrition_reporting": r"\blost to follow[- ]up\b|\bwithdraw|\battrition\b",
+            "trial_registration": r"\bNCT\d{8}\b|\btrial registration\b|\bregistered at\b",
+            "intention_to_treat": r"\bintention[- ]to[- ]treat\b|\bintent[- ]to[- ]treat\b",
+        }
+    elif re.search(r"\bcohort\b|\bcase.control\b|\bcross-sectional\b|\bobservational\b", classification_text, re.IGNORECASE):
+        study_type = "observational_study"
+        framework = "Observational-study reporting signals"
+        signal_patterns = {
+            "eligibility_criteria": r"\beligibility criteria\b|\binclusion criteria\b|\bexclusion criteria\b",
+            "exposure_definition": r"\bexposure (?:was )?(?:defined|measured|assessed)\b",
+            "outcome_definition": r"\boutcome (?:was )?(?:defined|measured|assessed)\b",
+            "confounding_adjustment": r"\bconfound|\badjusted (?:for|model)\b|\bmultivaria(?:te|ble)\b",
+            "missing_data": r"\bmissing data\b|\blost to follow[- ]up\b|\battrition\b",
+            "sensitivity_analysis": r"\bsensitivity analys",
+        }
+    elif re.search(r"\breview\b", title, re.IGNORECASE):
+        study_type = "narrative_review"
+        framework = "Narrative-review transparency signals"
+        signal_patterns = {
+            "source_search_described": r"\bsearch(?:ed| strategy)?\b|\b(?:pubmed|medline|embase|scopus)\b",
+            "selection_criteria": r"\binclusion criteria\b|\bexclusion criteria\b|\bselection criteria\b",
+            "quality_appraisal": r"\brisk of bias\b|\bquality assessment\b|\bquality appraisal\b",
+            "limitations_discussed": r"\blimitation",
+            "funding_reported": r"\bfund(?:ed|ing)\b|\bfinancial support\b",
+            "conflicts_reported": r"\bconflict of interest\b|\bcompeting interests\b",
+        }
+    else:
+        study_type = "unclassified_study"
+        framework = "General study-reporting signals"
+        signal_patterns = {
+            "eligibility_criteria": r"\beligibility criteria\b|\binclusion criteria\b|\bexclusion criteria\b",
+            "comparator": r"\bplacebo\b|\bcontrol group\b|\bcomparator\b",
+            "outcomes_defined": r"\bprimary (?:outcome|endpoint)\b|\boutcome measure\b",
+            "adverse_events": r"\badverse event",
+            "limitations_discussed": r"\blimitation",
+            "registration": r"\bNCT\d{8}\b|\bregistered at\b|\bprotocol registration\b",
+        }
+    signals = {
+        label: bool(re.search(pattern, whole_text, re.IGNORECASE))
+        for label, pattern in signal_patterns.items()
+    }
+    present = [label for label, found in signals.items() if found]
+    missing = [label for label, found in signals.items() if not found]
+    coverage = len(present) / len(signals) if signals else 0
+    rating = (
+        "stronger reporting coverage"
+        if coverage >= 0.7
+        else "partial reporting coverage"
+        if coverage >= 0.4
+        else "limited or unclear reporting coverage"
+    )
+    return {
+        "study_type": study_type,
+        "appraisal_framework": framework,
+        "rating": rating,
+        "present_signals": present,
+        "missing_signals": missing,
+        "notice": "Automated reporting-signal screen only; not a validated RoB 2, ROBINS-I or systematic-review appraisal.",
+    }
+
+
+def _parse_pmc_appraisals(content: bytes) -> dict[str, dict[str, Any]]:
+    root = ElementTree.fromstring(content)
+    appraisals: dict[str, dict[str, Any]] = {}
+    for article in _local_nodes(root, "article"):
+        pmcid = _pmc_identifier(article)
+        if not pmcid:
+            continue
+        sections = _pmc_sections(article)
+        methods = _section_text(
+            sections,
+            ("method", "material", "participant", "patient", "study design", "trial design"),
+        )
+        results = _section_text(sections, ("result", "outcome", "finding"))
+        discussion = _section_text(sections, ("discussion", "limitation", "conclusion"))
+        abstract = _clean(" ".join(_element_text(node) for node in _local_nodes(article, "abstract")))
+        whole_text = _clean(" ".join(_element_text(node) for node in _local_nodes(article, "p")))[:100_000]
+        method_sources = [("Methods", methods), ("Abstract", abstract)]
+        result_sources = [("Results", results), ("Abstract", abstract), ("Discussion", discussion)]
+
+        study_design, design_locator = _appraisal_field(
+            method_sources,
+            [r"\brandomi[sz]", r"\bdouble[- ]blind", r"\bsingle[- ]blind", r"\bcrossover\b", r"\bcohort\b", r"\bcase.control\b", r"\bparallel.group\b"],
+            "Study design was not stated clearly in the retrieved full text.",
+        )
+        population, population_locator = _appraisal_field(
+            method_sources,
+            [r"\bparticipants?\b", r"\bpatients?\b", r"\bsubjects?\b", r"\benrolled\b", r"\bn\s*=\s*\d+", r"\beligib"],
+            "Population details were not located in the retrieved full text.",
+        )
+        dose, dose_locator = _appraisal_field(
+            method_sources,
+            [r"\b\d+(?:\.\d+)?\s*(?:mg|g|ml|µg|mcg)\b", r"\bonce daily\b", r"\btwice daily\b", r"\bintervention\b", r"\badministered\b"],
+            "Dose or exposure details were not located in the retrieved full text.",
+        )
+        comparator, comparator_locator = _appraisal_field(
+            method_sources,
+            [r"\bplacebo\b", r"\bcontrol group\b", r"\bcomparator\b", r"\busual care\b", r"\bactive control\b"],
+            "Comparator details were not located in the retrieved full text.",
+        )
+        duration, duration_locator = _appraisal_field(
+            method_sources,
+            [r"\b\d+(?:\.\d+)?\s*(?:days?|weeks?|months?|years?)\b", r"\bfollow[- ]up\b", r"\btreatment period\b"],
+            "Treatment or follow-up duration was not located in the retrieved full text.",
+        )
+        endpoints, endpoints_locator = _appraisal_field(
+            method_sources,
+            [r"\bprimary (?:outcome|endpoint)\b", r"\bsecondary (?:outcome|endpoint)\b", r"\boutcome measure\b", r"\bwas assessed\b", r"\bwas measured\b"],
+            "Endpoint definitions were not located in the retrieved full text.",
+        )
+        numerical_results, results_locator = _appraisal_field(
+            result_sources,
+            [r"\bp\s*[<=>]\s*0?\.\d+", r"\bconfidence interval\b", r"\b95%\s*ci\b", r"\bmean difference\b", r"\b\d+(?:\.\d+)?%\b", r"\bsignificant"],
+            "No numerical result sentence was extracted from the retrieved full text.",
+        )
+        adverse_events, adverse_locator = _appraisal_field(
+            result_sources,
+            [r"\badverse event", r"\bside effect", r"\btolerat", r"\bsafety\b", r"\bwithdraw.*(?:adverse|event)"],
+            "Adverse-event reporting was not located in the retrieved full text.",
+        )
+        limitations, limitations_locator = _appraisal_field(
+            [("Limitations / Discussion", discussion), ("Results", results)],
+            [r"\blimitation", r"\bsmall sample\b", r"\bshort duration\b", r"\bpotential bias\b", r"\bgenerali[sz]ab", r"\bunderpowered\b"],
+            "An explicit author-reported limitation was not located; independent critical appraisal is still required.",
+        )
+
+        funding_nodes = _local_nodes(article, "funding-group")
+        funding = _clean(" ".join(_element_text(node) for node in funding_nodes))[:450]
+        conflict_nodes = [
+            node
+            for node in _local_nodes(article, "fn")
+            if node.attrib.get("fn-type") in {"conflict", "coi-statement", "competing-interests"}
+        ]
+        conflicts = _clean(" ".join(_element_text(node) for node in conflict_nodes))[:450]
+        license_nodes = _local_nodes(article, "license")
+        license_text = _clean(" ".join(_element_text(node) for node in license_nodes))[:300]
+
+        reporting_screen = _study_reporting_screen(article, whole_text)
+
+        appraisals[pmcid] = {
+            "pmcid": pmcid,
+            "full_text_url": f"https://pmc.ncbi.nlm.nih.gov/articles/{pmcid}/",
+            "source_status": "pmc_full_text_appraised",
+            "appraisal_status": "full_text_structured_appraisal",
+            "study_type": reporting_screen["study_type"],
+            "appraisal_framework": reporting_screen["appraisal_framework"],
+            "study_design": study_design,
+            "population": population,
+            "dose": dose,
+            "comparator": comparator,
+            "duration": duration,
+            "endpoints": endpoints,
+            "numerical_results": numerical_results,
+            "adverse_events": adverse_events,
+            "limitations": limitations,
+            "funding": funding or "Funding information was not located in the retrieved full text.",
+            "conflicts": conflicts or "A conflict-of-interest statement was not located in the retrieved full text.",
+            "license": license_text or "License statement not extracted; follow the PMC article-level terms.",
+            "risk_of_bias": {
+                "rating": reporting_screen["rating"],
+                "present_signals": reporting_screen["present_signals"],
+                "missing_signals": reporting_screen["missing_signals"],
+                "notice": reporting_screen["notice"],
+            },
+            "section_locators": {
+                "study_design": design_locator,
+                "population": population_locator,
+                "dose": dose_locator,
+                "comparator": comparator_locator,
+                "duration": duration_locator,
+                "endpoints": endpoints_locator,
+                "numerical_results": results_locator,
+                "adverse_events": adverse_locator,
+                "limitations": limitations_locator,
+            },
+        }
+    return appraisals
+
+
 def _parse_pubmed(content: bytes) -> list[dict[str, Any]]:
     root = ElementTree.fromstring(content)
     records = []
@@ -354,10 +595,12 @@ def _parse_pubmed(content: bytes) -> list[dict[str, Any]]:
         if not year:
             year = _element_text(article_node.find(".//JournalIssue/PubDate/MedlineDate"))
         doi = ""
+        pmcid = ""
         for identifier in article.findall(".//ArticleId"):
             if identifier.attrib.get("IdType") == "doi":
                 doi = _element_text(identifier)
-                break
+            elif identifier.attrib.get("IdType") == "pmc":
+                pmcid = _element_text(identifier)
         population = _study_field(
             abstract,
             [r"\bparticipants?\b", r"\bpatients?\b", r"\bsubjects?\b", r"\bvolunteers?\b", r"\bn\s*="],
@@ -385,13 +628,28 @@ def _parse_pubmed(content: bytes) -> list[dict[str, Any]]:
                 "journal": journal,
                 "publication_date": year or "Not reported",
                 "doi": doi or None,
+                "pmcid": pmcid or None,
                 "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
                 "population": population,
                 "dose": dose,
                 "endpoints": endpoints,
                 "limitations": limitations,
                 "abstract_excerpt": abstract[:700],
-                "source_status": "live_pubmed_abstract",
+                "source_status": "pubmed_abstract_only",
+                "appraisal_status": "abstract_only",
+                "study_type": "not_appraised",
+                "appraisal_framework": "Abstract-only screening",
+                "study_design": "Full-text study design not appraised.",
+                "comparator": "Full-text comparator not appraised.",
+                "duration": "Full-text treatment duration not appraised.",
+                "numerical_results": "Full-text numerical results not appraised.",
+                "adverse_events": "Full-text adverse-event reporting not appraised.",
+                "funding": "Full-text funding statement not appraised.",
+                "conflicts": "Full-text conflict-of-interest statement not appraised.",
+                "license": None,
+                "full_text_url": None,
+                "risk_of_bias": None,
+                "section_locators": {},
             }
         )
     return records
@@ -424,7 +682,29 @@ def _pubmed_search(query: str) -> tuple[dict[str, Any], ...]:
             fetch_params["email"] = settings.ncbi_contact_email
         fetched = client.get(f"{NCBI_BASE}/efetch.fcgi", params=fetch_params)
         fetched.raise_for_status()
-    return tuple(_parse_pubmed(fetched.content))
+        records = _parse_pubmed(fetched.content)
+        pmcids = [record["pmcid"] for record in records if record.get("pmcid")]
+        if pmcids:
+            try:
+                full_text_params: dict[str, str] = {
+                    "db": "pmc",
+                    "id": ",".join(pmcids),
+                    "retmode": "xml",
+                    "tool": "ip_sakti",
+                }
+                if settings.ncbi_api_key:
+                    full_text_params["api_key"] = settings.ncbi_api_key
+                if settings.ncbi_contact_email:
+                    full_text_params["email"] = settings.ncbi_contact_email
+                full_text = client.get(f"{NCBI_BASE}/efetch.fcgi", params=full_text_params)
+                full_text.raise_for_status()
+                appraisals = _parse_pmc_appraisals(full_text.content)
+                for record in records:
+                    if record.get("pmcid") in appraisals:
+                        record.update(appraisals[record["pmcid"]])
+            except (httpx.HTTPError, ElementTree.ParseError, KeyError, TypeError, ValueError) as exc:
+                logger.warning("PMC full-text appraisal unavailable error=%s", type(exc).__name__)
+    return tuple(records)
 
 
 def search_pubmed(case: Any, query: dict[str, str]) -> dict[str, Any]:

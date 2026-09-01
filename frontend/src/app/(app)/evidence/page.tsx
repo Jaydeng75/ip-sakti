@@ -18,6 +18,8 @@ export default function ScientificEvidencePage() {
   const retrieval = analysis?.result.evidence_retrieval;
   const claimGraph = analysis?.result.claim_evidence_graph;
   const studies = analysis?.result.case_specific_analysis?.scientific_studies;
+  const fullTextStudyCount = studies?.full_text_appraised_count ?? studies?.records.filter((study) => study.appraisal_status === "full_text_structured_appraisal").length ?? 0;
+  const abstractOnlyStudyCount = studies?.abstract_only_count ?? studies?.records.filter((study) => study.source_status !== "uploaded_case_document_unappraised" && study.appraisal_status !== "full_text_structured_appraisal").length ?? 0;
 
   const refreshDocuments = useCallback(async () => {
     if (!currentCase.backendId) return;
@@ -83,7 +85,79 @@ export default function ScientificEvidencePage() {
             <EvidenceCard number="03" title="Safety information" status={evidence.safety.status} summary={evidence.safety.summary} confidence={evidence.safety.confidence} />
             <div className="rounded-2xl border border-border bg-[#16212B] p-6 text-white"><p className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/50">04 / Evidence confidence</p><p className="mt-5 text-3xl font-semibold">{Math.round(evidence.confidence.score * 100)}%</p><p className="mt-2 text-sm font-medium">{evidence.confidence.label}</p><p className="mt-3 text-xs leading-5 text-white/60">{evidence.confidence.basis}</p></div>
           </section>
-          {studies && <section className="mt-8 rounded-3xl border border-border bg-surface p-6 md:p-8"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-start"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Structured study appraisal</p><h2 className="mt-2 text-2xl font-semibold">Population, dose, endpoints and limitations</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-ink-muted">Query: {studies.query}. {studies.notice}</p></div><a href={studies.search_url} target="_blank" rel="noreferrer" className="rounded-xl border border-accent px-4 py-2 text-xs font-semibold text-accent">Open PubMed search ↗</a></div>{studies.records.length === 0 ? <div className="mt-6 rounded-2xl border border-warm/30 bg-warm-subtle p-5"><p className="text-sm font-semibold text-warm">No study record was retrieved for this exact query.</p><p className="mt-2 text-xs leading-5 text-ink-muted">Do not substitute ingredient-level popularity for product-specific evidence. Refine the query or upload the relevant full text.</p></div> : <div className="mt-6 space-y-4">{studies.records.map((study, index) => <article key={`${study.pmid ?? study.locator}-${index}`} className="rounded-2xl border border-border bg-background p-5"><div className="flex flex-col justify-between gap-2 md:flex-row"><div><p className="text-sm font-semibold">{study.title}</p><p className="mt-1 text-xs text-ink-muted">{study.journal} · {study.publication_date} · {study.pmid ? `PMID ${study.pmid}` : study.locator ?? study.source_status}</p></div><a href={study.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-accent">Source ↗</a></div><div className="mt-5 grid gap-3 md:grid-cols-2"><StudyFact label="Population" value={study.population} /><StudyFact label="Dose / exposure" value={study.dose} /><StudyFact label="Endpoints / results" value={study.endpoints} /><StudyFact label="Limitations" value={study.limitations} /></div></article>)}</div>}</section>}
+          {studies && (
+            <section className="mt-8 rounded-3xl border border-border bg-surface p-6 md:p-8">
+              <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Full-text study appraisal</p>
+                  <h2 className="mt-2 text-2xl font-semibold">Methods, outcomes, safety and reporting signals</h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-muted">Query: {studies.query}. {studies.notice}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <StudyStatus label="PMC full text appraised" value={fullTextStudyCount} tone="positive" />
+                    <StudyStatus label="PubMed abstract only" value={abstractOnlyStudyCount} tone="warning" />
+                    <StudyStatus label="Uploaded passages" value={studies.uploaded_record_count ?? 0} tone="neutral" />
+                  </div>
+                </div>
+                <a href={studies.search_url} target="_blank" rel="noreferrer" className="rounded-xl border border-accent px-4 py-2 text-xs font-semibold text-accent">Open PubMed search ↗</a>
+              </div>
+              {studies.records.length === 0 ? (
+                <div className="mt-6 rounded-2xl border border-warm/30 bg-warm-subtle p-5">
+                  <p className="text-sm font-semibold text-warm">No study record was retrieved for this exact query.</p>
+                  <p className="mt-2 text-xs leading-5 text-ink-muted">Do not substitute ingredient-level popularity for product-specific evidence. Refine the query or upload the relevant full text.</p>
+                </div>
+              ) : (
+                <div className="mt-6 space-y-4">
+                  {studies.records.map((study, index) => {
+                    const fullText = study.appraisal_status === "full_text_structured_appraisal";
+                    return (
+                      <article key={`${study.pmid ?? study.locator}-${index}`} className="rounded-2xl border border-border bg-background p-5">
+                        <div className="flex flex-col justify-between gap-3 md:flex-row">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`rounded-full px-2.5 py-1 font-mono text-[9px] uppercase ${fullText ? "bg-accent-subtle text-accent" : "bg-warm-subtle text-warm"}`}>
+                                {fullText ? "PMC full text appraised" : "Abstract / passage only"}
+                              </span>
+                              {study.study_type && study.study_type !== "not_appraised" && <span className="rounded-full border border-border px-2.5 py-1 font-mono text-[9px] uppercase text-ink-muted">{formatSignal(study.study_type)}</span>}
+                              {study.pmcid && <span className="font-mono text-[9px] text-ink-muted">{study.pmcid}</span>}
+                            </div>
+                            <p className="mt-3 text-sm font-semibold">{study.title}</p>
+                            <p className="mt-1 text-xs text-ink-muted">{study.journal} · {study.publication_date} · {study.pmid ? `PMID ${study.pmid}` : study.locator ?? study.source_status}</p>
+                          </div>
+                          <a href={study.full_text_url ?? study.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-accent">{fullText ? "Open PMC full text" : "Open source"} ↗</a>
+                        </div>
+                        {!fullText && <p className="mt-4 rounded-xl border border-warm/30 bg-warm-subtle p-3 text-xs leading-5 text-warm">This record is not a full-text appraisal. Treat all extracted fields as screening leads only.</p>}
+                        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                          <StudyFact label="Study design" value={study.study_design ?? "Not appraised."} locator={study.section_locators?.study_design} />
+                          <StudyFact label="Population" value={study.population} locator={study.section_locators?.population} />
+                          <StudyFact label="Dose / exposure" value={study.dose} locator={study.section_locators?.dose} />
+                          <StudyFact label="Comparator" value={study.comparator ?? "Not appraised."} locator={study.section_locators?.comparator} />
+                          <StudyFact label="Duration" value={study.duration ?? "Not appraised."} locator={study.section_locators?.duration} />
+                          <StudyFact label="Defined endpoints" value={study.endpoints} locator={study.section_locators?.endpoints} />
+                          <StudyFact label="Numerical results" value={study.numerical_results ?? "Not appraised."} locator={study.section_locators?.numerical_results} />
+                          <StudyFact label="Adverse events / safety" value={study.adverse_events ?? "Not appraised."} locator={study.section_locators?.adverse_events} />
+                          <StudyFact label="Author limitations" value={study.limitations} locator={study.section_locators?.limitations} />
+                          <StudyFact label="Funding" value={study.funding ?? "Not appraised."} />
+                          <StudyFact label="Conflicts" value={study.conflicts ?? "Not appraised."} />
+                          <StudyFact label="Article-level terms" value={study.license ?? "Not available for this record."} />
+                        </div>
+                        {study.risk_of_bias && (
+                          <div className="mt-4 rounded-2xl border border-border bg-surface p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-accent">{study.appraisal_framework ?? "Risk-of-bias reporting screen"}</p>
+                              <span className="rounded-full bg-accent-subtle px-2.5 py-1 text-[10px] font-semibold text-accent">{study.risk_of_bias.rating}</span>
+                            </div>
+                            <p className="mt-3 text-xs leading-5 text-ink-muted">Reported signals: {study.risk_of_bias.present_signals.map(formatSignal).join(", ") || "none detected"}.</p>
+                            <p className="mt-1 text-xs leading-5 text-ink-muted">Not detected: {study.risk_of_bias.missing_signals.map(formatSignal).join(", ") || "none"}.</p>
+                            <p className="mt-3 text-[10px] font-semibold text-warm">{study.risk_of_bias.notice}</p>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
           <section className="mt-10 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
             <div className="rounded-3xl border border-border bg-surface p-6"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Evidence gaps</p><h2 className="mt-2 text-2xl font-semibold">What is still missing?</h2><div className="mt-5 space-y-3">{evidence.gaps.map((gap, index) => <div key={gap} className="flex gap-3 rounded-xl border border-border bg-background p-4"><span className="font-mono text-[10px] text-accent">{String(index + 1).padStart(2, "0")}</span><p className="text-sm">{gap}</p></div>)}</div></div>
             <div className="rounded-3xl border border-border bg-surface p-6"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">Evidence references</p><h2 className="mt-2 text-2xl font-semibold">Sources supporting this screening</h2><div className="mt-5 space-y-3">{evidence.citations.map((source) => <button type="button" onClick={() => void openCitation(source)} key={source.id} className="block w-full rounded-xl border border-border bg-background p-4 text-left transition hover:border-accent"><div className="flex justify-between gap-4"><p className="text-sm font-semibold">{source.title}</p><span className="font-mono text-[9px] text-ink-muted">{source.locator ?? source.jurisdiction}</span></div><p className="mt-2 text-xs text-ink-muted">{source.authority} · {source.support_status}</p><p className="mt-3 text-xs leading-5 text-ink-muted">{source.excerpt}</p></button>)}</div></div>
@@ -113,6 +187,15 @@ function DarkMetric({ label, value }: { label: string; value: number }) {
   return <div className="min-w-28 rounded-2xl border border-white/10 bg-white/5 px-4 py-3"><p className="text-2xl font-semibold text-[#9BD0C0]">{value}</p><p className="mt-1 text-[9px] uppercase tracking-[0.15em] text-white/45">{label}</p></div>;
 }
 
-function StudyFact({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-xl border border-border bg-surface p-4"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-accent">{label}</p><p className="mt-2 text-xs leading-5 text-ink-muted">{value}</p></div>;
+function StudyFact({ label, value, locator }: { label: string; value: string; locator?: string | null }) {
+  return <div className="rounded-xl border border-border bg-surface p-4"><div className="flex items-center justify-between gap-2"><p className="font-mono text-[9px] uppercase tracking-[0.14em] text-accent">{label}</p>{locator && <span className="font-mono text-[8px] uppercase text-ink-muted">{locator}</span>}</div><p className="mt-2 text-xs leading-5 text-ink-muted">{value}</p></div>;
+}
+
+function StudyStatus({ label, value, tone }: { label: string; value: number; tone: "positive" | "warning" | "neutral" }) {
+  const classes = tone === "positive" ? "bg-accent-subtle text-accent" : tone === "warning" ? "bg-warm-subtle text-warm" : "bg-background text-ink-muted";
+  return <span className={`rounded-full px-3 py-1.5 font-mono text-[9px] uppercase ${classes}`}>{value} · {label}</span>;
+}
+
+function formatSignal(value: string) {
+  return value.replaceAll("_", " ");
 }

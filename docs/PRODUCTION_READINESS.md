@@ -16,7 +16,7 @@
 - Tamper-evident audit chaining and administrator integrity verification.
 - IndicTrans2 model revisions pinned to reviewed commits, dual-direction caching, optional startup preload and machine-translation provenance.
 - PDF decision records with evidence lineage, corpus/run identity and deterministic record hashes.
-- Live PubMed ESearch/EFetch with structured population, dose, endpoint and limitation extraction.
+- Live PubMed discovery plus PMC JATS full-text appraisal for study design, population, dose, comparator, duration, endpoints, numerical outcomes, adverse events, funding, conflicts and author-reported limitations; unavailable full text remains explicitly abstract-only.
 - Credentialed Google Patents BigQuery or EPO OPS patent-family/claim retrieval with cost bounds, coverage disclosure, feature-level overlap charts and fail-closed credential handling.
 - Exact uploaded TK passage extraction with page/chunk and SHA-256 lineage; no false absence conclusion when TKDL is inaccessible.
 - Quantitative case-input completeness gates and fact-linked, falsifiable design-around directions.
@@ -38,7 +38,8 @@ The complete GitHub Actions definition is stored at `docs/github-actions-ci.temp
 
 ## Data and professional approval gates
 
-- Obtain licences or API authorization for patent databases and scientific full text.
+- Confirm article-level PMC/full-text reuse terms and obtain licences or API authorization for any additional scientific full-text sources and patent databases.
+- Require qualified reviewers to complete the applicable validated risk-of-bias method (for example, RoB 2 or ROBINS-I); the automated reporting-signal screen is triage only.
 - Configure Google BigQuery Application Default Credentials or EPO OPS credentials and set an NCBI contact email; production startup rejects a deployment without these live-research controls.
 - Set a BigQuery query billing cap, budget alerts and least-privilege job-user permissions on the billing project; verify the public table modification timestamp and current patent-office records before relying on results.
 - Use TKDL only through authorized access. The application deliberately makes no unrestricted-access claim.

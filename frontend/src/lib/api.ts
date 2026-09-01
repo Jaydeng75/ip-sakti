@@ -278,6 +278,7 @@ type TraditionalKnowledgeRecord = {
 
 type ScientificStudy = {
   pmid?: string | null;
+  pmcid?: string | null;
   title: string;
   journal: string;
   publication_date: string;
@@ -288,6 +289,25 @@ type ScientificStudy = {
   endpoints: string;
   limitations: string;
   abstract_excerpt: string;
+  full_text_url?: string | null;
+  appraisal_status?: string;
+  study_type?: string;
+  appraisal_framework?: string;
+  study_design?: string;
+  comparator?: string;
+  duration?: string;
+  numerical_results?: string;
+  adverse_events?: string;
+  funding?: string;
+  conflicts?: string;
+  license?: string | null;
+  risk_of_bias?: {
+    rating: string;
+    present_signals: string[];
+    missing_signals: string[];
+    notice: string;
+  } | null;
+  section_locators?: Record<string, string | null>;
   locator?: string | null;
   source_status: string;
 };
@@ -300,6 +320,8 @@ type ScientificStudyCollection = {
   search_url: string;
   uploaded_record_count?: number;
   live_record_count?: number;
+  full_text_appraised_count?: number;
+  abstract_only_count?: number;
   notice?: string;
 };
 

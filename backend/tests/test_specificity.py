@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from services import research
-from services.research import _bigquery_terms, _parse_pubmed, build_research_query
+from services.research import _bigquery_terms, _parse_pmc_appraisals, _parse_pubmed, build_research_query
 from services.specificity import build_case_specific_analysis, build_specific_design_around
 
 
@@ -77,7 +77,7 @@ def test_pubmed_parser_extracts_structured_appraisal_fields():
       <ArticleTitle>Botanical randomized trial</ArticleTitle><Journal><Title>Evidence Journal</Title>
       <JournalIssue><PubDate><Year>2025</Year></PubDate></JournalIssue></Journal>
       <Abstract><AbstractText>Sixty adult participants were randomized. The dose was 300 mg twice daily. The primary endpoint was a validated stress score. Limitations included short duration and a small sample.</AbstractText></Abstract>
-      </Article></MedlineCitation><PubmedData><ArticleIdList><ArticleId IdType="doi">10.1/example</ArticleId></ArticleIdList></PubmedData>
+      </Article></MedlineCitation><PubmedData><ArticleIdList><ArticleId IdType="doi">10.1/example</ArticleId><ArticleId IdType="pmc">PMC123</ArticleId></ArticleIdList></PubmedData>
       </PubmedArticle></PubmedArticleSet>"""
     record = _parse_pubmed(xml)[0]
     assert "participants" in record["population"]
@@ -85,6 +85,47 @@ def test_pubmed_parser_extracts_structured_appraisal_fields():
     assert "endpoint" in record["endpoints"]
     assert "Limitations" in record["limitations"]
     assert record["url"].endswith("/123/")
+    assert record["pmcid"] == "PMC123"
+    assert record["appraisal_status"] == "abstract_only"
+
+
+def test_pmc_parser_extracts_full_text_appraisal_and_reporting_signals():
+    xml = b"""<pmc-articleset><article><front><article-meta>
+      <article-id pub-id-type="pmcid">PMC987654</article-id>
+      <permissions><license><license-p>Creative Commons Attribution 4.0.</license-p></license></permissions>
+      <abstract><p>A randomized placebo-controlled botanical trial.</p></abstract>
+      </article-meta></front><body>
+      <sec><title>Methods</title>
+        <p>Sixty adult participants were randomized to receive 300 mg twice daily or placebo for 8 weeks.</p>
+        <p>The primary endpoint was change in a validated stress score measured at week 8.</p>
+        <p>Allocation concealment and double-blind masking were used, and the trial registration was NCT12345678.</p>
+      </sec>
+      <sec><title>Results</title>
+        <p>The mean difference was -3.2 points (95% CI -5.1 to -1.3; p=0.002).</p>
+        <p>Adverse events were mild, and two participants withdrew.</p>
+      </sec>
+      <sec><title>Discussion and limitations</title><p>A limitation was the small sample and short duration.</p></sec>
+      </body><back>
+      <funding-group><award-group><funding-source>Public Research Council</funding-source></award-group></funding-group>
+      <fn-group><fn fn-type="conflict"><p>The authors declare no competing interests.</p></fn></fn-group>
+      </back></article></pmc-articleset>"""
+
+    record = _parse_pmc_appraisals(xml)["PMC987654"]
+
+    assert record["source_status"] == "pmc_full_text_appraised"
+    assert record["study_type"] == "randomized_trial"
+    assert record["appraisal_framework"] == "Randomized-trial reporting signals"
+    assert "randomized" in record["study_design"]
+    assert "participants" in record["population"]
+    assert "300 mg" in record["dose"]
+    assert "placebo" in record["comparator"]
+    assert "95% CI" in record["numerical_results"]
+    assert "Adverse events" in record["adverse_events"]
+    assert "small sample" in record["limitations"]
+    assert "Public Research Council" in record["funding"]
+    assert "no competing interests" in record["conflicts"]
+    assert "randomization" in record["risk_of_bias"]["present_signals"]
+    assert record["section_locators"]["population"] == "Methods"
 
 
 def test_research_query_uses_ingredient_or_group():
