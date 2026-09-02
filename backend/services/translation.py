@@ -1,7 +1,9 @@
+import asyncio
 import logging
 from dataclasses import dataclass
 
 import httpx
+from google.auth.exceptions import GoogleAuthError
 
 from config import settings
 
@@ -63,6 +65,20 @@ def normalize_language(language: str) -> tuple[str, str]:
     return name.title(), LANGUAGE_CODES[name]
 
 
+async def _service_headers() -> dict[str, str]:
+    headers = {"X-Service-Token": settings.translation_service_token or ""}
+    if settings.translation_use_google_identity:
+        # Cloud Run service-to-service authentication. Fetching the metadata-backed
+        # identity token is synchronous, so keep it off the API event loop.
+        from google.auth.transport.requests import Request
+        from google.oauth2 import id_token
+
+        audience = settings.translation_url.rstrip("/")
+        token = await asyncio.to_thread(id_token.fetch_id_token, Request(), audience)
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 async def translate_text(text: str, source_language: str, target_language: str) -> TranslationResult:
     source_name, source_code = normalize_language(source_language)
     target_name, target_code = normalize_language(target_language)
@@ -76,7 +92,7 @@ async def translate_text(text: str, source_language: str, target_language: str) 
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
                 f"{settings.translation_url.rstrip('/')}/translate",
-                headers={"X-Service-Token": settings.translation_service_token or ""},
+                headers=await _service_headers(),
                 json={
                     "texts": [text],
                     "source_language": source_code,
@@ -97,6 +113,6 @@ async def translate_text(text: str, source_language: str, target_language: str) 
                 payload.get("model"),
                 True,
             )
-    except (httpx.HTTPError, ValueError, TypeError) as exc:
+    except (httpx.HTTPError, GoogleAuthError, ValueError, TypeError) as exc:
         logger.warning("IndicTrans2 translation unavailable: %s", exc)
         return TranslationResult(text, "IndicTrans2", "unavailable", source_name, target_name)

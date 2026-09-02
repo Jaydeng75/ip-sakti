@@ -94,6 +94,8 @@ uvicorn app:app --host 0.0.0.0 --port 8100
 
 Then set `IPSAKTI_TRANSLATION_ENABLED=true` in `backend/.env`. IndicTrans2 checkpoints are substantial; CPU inference is suitable for evaluation and defaults to greedy decoding (`INDICTRANS_GENERATION_BEAMS=1`). An accelerator-backed service can raise beam search up to 5 for quality-sensitive production traffic. For a controlled deployment, replace both `main` revision values with reviewed Hugging Face commit hashes.
 
+For a private Google Cloud Run deployment, grant the API service account `roles/run.invoker` on the translation service and set `IPSAKTI_TRANSLATION_USE_GOOGLE_IDENTITY=true`. The API then obtains a short-lived Google identity token for every service-to-service call; `IPSAKTI_TRANSLATION_SERVICE_TOKEN` remains a second authentication layer.
+
 ## Verification
 
 ```bash

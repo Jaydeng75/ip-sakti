@@ -1,6 +1,7 @@
 import gc
 import hmac
 import logging
+import os
 import re
 import threading
 from collections import OrderedDict
@@ -293,3 +294,10 @@ def translate(payload: TranslationRequest, x_service_token: str = Header(default
         target_language=payload.target_language,
         machine_translated=model_id != "identity",
     )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    # Cloud Run injects PORT. The local default preserves docker-compose usage.
+    uvicorn.run("app:app", host="0.0.0.0", port=int(os.environ.get("PORT", "8100")), workers=1)

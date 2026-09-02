@@ -17,4 +17,4 @@ COPY app.py .
 RUN mkdir -p /models/huggingface && chown -R app:app /app /models
 USER app
 EXPOSE 8100
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8100", "--workers", "1"]
+CMD ["python", "app.py"]

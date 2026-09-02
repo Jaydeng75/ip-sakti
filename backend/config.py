@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     translation_enabled: bool = False
     translation_url: str = "http://localhost:8100"
     translation_service_token: str | None = None
+    translation_use_google_identity: bool = False
     translation_timeout_seconds: float = 120.0
     rate_limit_requests: int = 120
     rate_limit_window_seconds: int = 60
