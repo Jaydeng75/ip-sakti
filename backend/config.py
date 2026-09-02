@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     clamav_timeout_seconds: float = 15.0
     demo_mode: bool = False
     registration_enabled: bool = True
+    auth_store_provider: str = "database"
+    firestore_project: str | None = None
+    firestore_database: str = "(default)"
+    firestore_auth_collection: str = "ip_sakti_auth_users"
+    firestore_revocation_collection: str = "ip_sakti_auth_revocations"
     bootstrap_admin_email: str | None = None
     bootstrap_admin_password: str | None = None
     corpus_version: str = "2026-09-01.official-registry.8"

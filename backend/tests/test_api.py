@@ -5,8 +5,13 @@ os.environ.setdefault("IPSAKTI_DEMO_MODE", "true")
 os.environ.setdefault("IPSAKTI_SECRET_KEY", "test-secret-key-with-more-than-thirty-two-characters")
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
+import main
+import models
+from database import SessionLocal
 from main import app
+from services.auth_store import AccountAlreadyExists, AuthRecord, subject_for_email
 
 
 def auth_headers(client: TestClient, label: str = "analyst") -> dict[str, str]:
@@ -71,6 +76,52 @@ def test_registration_login_and_logout_lifecycle():
         login = client.post("/api/v1/auth/login", json={"email": email, "password": password})
         assert login.status_code == 200, login.text
         assert login.json()["access_token"] != registration_body["access_token"]
+
+
+def test_persistent_auth_survives_loss_of_local_user_mirror(monkeypatch):
+    accounts: dict[str, AuthRecord] = {}
+    revoked: set[str] = set()
+
+    def fake_create_account(*, email, display_name, password_hash, role="analyst", is_active=True):
+        subject = subject_for_email(email)
+        if subject in accounts:
+            raise AccountAlreadyExists("An account with this email already exists")
+        account = AuthRecord(subject, email.lower(), display_name, password_hash, role, is_active)
+        accounts[subject] = account
+        return account
+
+    monkeypatch.setattr(main, "persistent_auth_enabled", lambda: True)
+    monkeypatch.setattr(main, "create_account", fake_create_account)
+    monkeypatch.setattr(main, "get_account_by_email", lambda email: accounts.get(subject_for_email(email)))
+    monkeypatch.setattr(main, "get_account_by_subject", lambda subject: accounts.get(subject))
+    monkeypatch.setattr(main, "token_is_revoked", lambda jti: jti in revoked)
+    monkeypatch.setattr(main, "revoke_token", lambda **values: revoked.add(values["jti"]))
+
+    email = f"persistent-{uuid.uuid4().hex}@example.com"
+    password = "correct-horse-battery-staple"
+    with TestClient(app) as client:
+        registration = client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "display_name": "Persistent Analyst", "password": password},
+        )
+        assert registration.status_code == 201, registration.text
+        headers = {"Authorization": f"Bearer {registration.json()['access_token']}"}
+
+        with SessionLocal() as db:
+            local_user = db.scalar(select(models.User).where(models.User.email == email))
+            assert local_user is not None
+            db.delete(local_user)
+            db.commit()
+
+        restored = client.get("/api/v1/auth/me", headers=headers)
+        assert restored.status_code == 200, restored.text
+        assert restored.json()["email"] == email
+
+        login = client.post("/api/v1/auth/login", json={"email": email, "password": password})
+        assert login.status_code == 200, login.text
+        login_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        assert client.post("/api/v1/auth/logout", headers=login_headers).status_code == 204
+        assert client.get("/api/v1/auth/me", headers=login_headers).status_code == 401
 
 
 def test_authenticated_case_analysis_and_grounded_answer():

@@ -52,6 +52,17 @@ from security import (
     hash_password,
     verify_password,
 )
+from services.auth_store import (
+    AccountAlreadyExists,
+    AuthRecord,
+    AuthStoreError,
+    create_account,
+    get_account_by_email,
+    get_account_by_subject,
+    persistent_auth_enabled,
+    revoke_token,
+    token_is_revoked,
+)
 from services.evidence import (
     EvidenceExtractionError,
     document_status,
@@ -378,9 +389,40 @@ def current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     try:
         payload = decode_access_token(credentials.credentials)
-        user_id = int(payload["sub"])
+        subject = str(payload["sub"])
         token_id = str(payload["jti"])
     except (jwt.PyJWTError, KeyError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired access token",
+        ) from None
+    if persistent_auth_enabled():
+        try:
+            if token_is_revoked(token_id):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Access token has been signed out",
+                )
+            account = get_account_by_subject(subject)
+        except AuthStoreError as exc:
+            logger.exception("Persistent authentication lookup failed")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service is temporarily unavailable",
+            ) from exc
+        if not account or not account.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User is inactive or missing",
+            )
+        user = mirror_account(db, account)
+        db.commit()
+        db.refresh(user)
+        return user
+
+    try:
+        user_id = int(subject)
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired access token",
@@ -400,6 +442,28 @@ def current_user(
 
 
 CurrentUser = Annotated[models.User, Depends(current_user)]
+
+
+def mirror_account(db: Session, account: AuthRecord) -> models.User:
+    """Create or refresh the per-instance SQL user used by case foreign keys."""
+    user = db.scalar(select(models.User).where(models.User.email == account.email))
+    if not user:
+        user = models.User(
+            email=account.email,
+            display_name=account.display_name,
+            password_hash=account.password_hash,
+            role=account.role,
+            is_active=account.is_active,
+        )
+        db.add(user)
+        db.flush()
+        return user
+    user.display_name = account.display_name
+    user.password_hash = account.password_hash
+    user.role = account.role
+    user.is_active = account.is_active
+    db.flush()
+    return user
 
 
 def require_case(db: Session, case_id: int, user: models.User) -> models.InnovationCase:
@@ -447,6 +511,7 @@ def readiness(db: Db):
     identity = embedding_identity()
     return {
         "status": "ready",
+        "auth_store": settings.auth_store_provider,
         "corpus_version": settings.corpus_version,
         "embedding_provider": identity["provider"],
         "embedding_model": identity["model"],
@@ -466,6 +531,30 @@ def register(payload: RegisterRequest, db: Db):
     if not settings.registration_enabled:
         raise HTTPException(status_code=404, detail="Self-registration is disabled")
     email = payload.email.lower()
+    if persistent_auth_enabled():
+        try:
+            account = create_account(
+                email=email,
+                display_name=payload.display_name,
+                password_hash=hash_password(payload.password),
+            )
+        except AccountAlreadyExists as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except AuthStoreError as exc:
+            logger.exception("Persistent account creation failed")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Account creation is temporarily unavailable",
+            ) from exc
+        user = mirror_account(db, account)
+        audit(db, user.id, "user.registered", "user", user.id)
+        db.commit()
+        db.refresh(user)
+        return TokenResponse(
+            access_token=create_access_token(account.subject, user.role),
+            user=UserResponse.model_validate(user),
+        )
+
     if db.scalar(select(models.User).where(models.User.email == email)):
         raise HTTPException(status_code=409, detail="An account with this email already exists")
     user = models.User(
@@ -486,6 +575,28 @@ def register(payload: RegisterRequest, db: Db):
 
 @app.post(f"{settings.api_prefix}/auth/login", response_model=TokenResponse, tags=["auth"])
 def login(payload: LoginRequest, db: Db):
+    if persistent_auth_enabled():
+        try:
+            account = get_account_by_email(payload.email)
+        except AuthStoreError as exc:
+            logger.exception("Persistent account lookup failed")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Sign in is temporarily unavailable",
+            ) from exc
+        if not account or not verify_password(payload.password, account.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        if not account.is_active:
+            raise HTTPException(status_code=403, detail="Account is inactive")
+        user = mirror_account(db, account)
+        audit(db, user.id, "user.login", "user", user.id)
+        db.commit()
+        db.refresh(user)
+        return TokenResponse(
+            access_token=create_access_token(account.subject, user.role),
+            user=UserResponse.model_validate(user),
+        )
+
     user = db.scalar(select(models.User).where(models.User.email == payload.email.lower()))
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -534,6 +645,19 @@ def logout(
 ):
     payload = decode_access_token(credentials.credentials)
     token_id = str(payload["jti"])
+    if persistent_auth_enabled():
+        try:
+            revoke_token(
+                jti=token_id,
+                subject=str(payload["sub"]),
+                expires_at=datetime.fromtimestamp(payload["exp"], tz=UTC),
+            )
+        except AuthStoreError as exc:
+            logger.exception("Persistent token revocation failed")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Sign out is temporarily unavailable",
+            ) from exc
     if not db.scalar(select(models.RevokedToken).where(models.RevokedToken.jti == token_id)):
         db.add(
             models.RevokedToken(

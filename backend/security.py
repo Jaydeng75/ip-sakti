@@ -21,10 +21,10 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(user_id: int, role: str) -> str:
+def create_access_token(subject: int | str, role: str) -> str:
     now = datetime.now(UTC)
     payload = {
-        "sub": str(user_id),
+        "sub": str(subject),
         "role": role,
         "jti": uuid.uuid4().hex,
         "iat": now,
